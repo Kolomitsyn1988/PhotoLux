@@ -157,12 +157,43 @@
         item.settings = { ...settings };
         syncInputs();
         requestRender();
+        refreshPencil(item, settings);
+        scheduleThumbUpdate();
         updateUndoBtn();
     }
 
     function updateUndoBtn() {
         const item = items[activeIndex];
         el.undo.disabled = !item || !item.history || item.history.length === 0;
+    }
+
+    // ---------- признаки и превью правок в галерее ----------
+    function isEdited(s) {
+        return Object.keys(DEFAULTS).some(k => s[k] !== DEFAULTS[k]);
+    }
+
+    function refreshPencil(item, liveSettings) {
+        if (!item || !item.pencil) return;
+        item.pencil.hidden = !isEdited(liveSettings || item.settings || {});
+    }
+
+    // миниатюра активного фото перерисовывается с правками (с задержкой на время драга)
+    let thumbTimer = null;
+    function scheduleThumbUpdate() {
+        if (thumbTimer) clearTimeout(thumbTimer);
+        thumbTimer = setTimeout(() => {
+            thumbTimer = null;
+            if (!sourceCanvas || !thumbRenderer || activeIndex < 0) return;
+            const item = items[activeIndex];
+            if (!item || !item.thumbCanvas) return;
+            thumbRenderer.setImage(sourceCanvas, 256, 256);
+            const rendered = thumbRenderer.render(normalizedSettings(settings), bwWeights(settings), rotation);
+            if (!rendered) return;
+            const ctx = item.thumbCanvas.getContext('2d');
+            ctx.clearRect(0, 0, item.thumbCanvas.width, item.thumbCanvas.height);
+            ctx.drawImage(rendered, 0, 0, item.thumbCanvas.width, item.thumbCanvas.height);
+            refreshPencil(item, settings);
+        }, 350);
     }
 
     let exportFormat = 'jpeg';
@@ -415,11 +446,9 @@ void main() {
         gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
 
-    // ---------- мини-рендерер: превью пресетов на маленьком WebGL-канвасе ----------
+    // ---------- мини-рендерер: превью пресетов и миниатюр галереи ----------
     const thumbRenderer = (() => {
-        const TW = 256, TH = 192;
         const canvas = document.createElement('canvas');
-        canvas.width = TW; canvas.height = TH;
         const g = canvas.getContext('webgl', { premultipliedAlpha: false, preserveDrawingBuffer: true, antialias: false });
         if (!g) return null;
 
@@ -444,8 +473,6 @@ void main() {
             quad = g.createBuffer();
             g.bindBuffer(g.ARRAY_BUFFER, quad);
             g.bufferData(g.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), g.STATIC_DRAW);
-            tA = target(TW, TH); tB = target(TW, TH);
-            tC = target(TW, TH); tD = target(TW, TH);
         } catch (e) {
             console.error('Thumb renderer init failed:', e);
             return null;
@@ -453,7 +480,7 @@ void main() {
 
         function pass(prog, srcTex, dst, dx, dy) {
             g.bindFramebuffer(g.FRAMEBUFFER, dst ? dst.fb : null);
-            g.viewport(0, 0, TW, TH);
+            g.viewport(0, 0, canvas.width, canvas.height);
             g.useProgram(prog.p);
             g.uniform1i(prog.u.u_tex, 0);
             g.activeTexture(g.TEXTURE0);
@@ -466,18 +493,24 @@ void main() {
         }
 
         const src2d = document.createElement('canvas');
-        src2d.width = TW; src2d.height = TH;
 
         return {
             canvas,
-            // кадрируем активное фото под 4:3 по центру
-            setImage(source) {
+            // кадрируем источник по центру под нужное соотношение сторон;
+            // при смене размеров пересоздаем FBO
+            setImage(source, tw, th) {
+                if (canvas.width !== tw || canvas.height !== th) {
+                    canvas.width = tw; canvas.height = th;
+                    tA = target(tw, th); tB = target(tw, th);
+                    tC = target(tw, th); tD = target(tw, th);
+                }
                 const sw = source.width, sh = source.height;
-                const ta = TW / TH, sa = sw / sh;
+                const ta = tw / th, sa = sw / sh;
                 let cw = sw, ch = sh, cx = 0, cy = 0;
                 if (sa > ta) { cw = sh * ta; cx = (sw - cw) / 2; }
                 else { ch = sw / ta; cy = (sh - ch) / 2; }
-                src2d.getContext('2d').drawImage(source, cx, cy, cw, ch, 0, 0, TW, TH);
+                src2d.width = tw; src2d.height = th;
+                src2d.getContext('2d').drawImage(source, cx, cy, cw, ch, 0, 0, tw, th);
                 if (tex) g.deleteTexture(tex);
                 tex = g.createTexture();
                 g.bindTexture(g.TEXTURE_2D, tex);
@@ -488,17 +521,18 @@ void main() {
                 g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR);
                 g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.LINEAR);
             },
-            render(n, w) {
+            render(n, w, rot = 0) {
                 if (!tex) return null;
-                const k = TW / Math.max(texW, 1); // радиусы в масштабе миниатюры
-                pass(progB, tex, tA, n.blur * k / TW, 0);
-                pass(progB, tA.tex, tB, 0, n.blur * k / TH);
+                const tw = canvas.width, th = canvas.height;
+                const k = tw / Math.max(texW, 1); // радиусы в масштабе миниатюры
+                pass(progB, tex, tA, n.blur * k / tw, 0);
+                pass(progB, tA.tex, tB, 0, n.blur * k / th);
                 const softR = Math.max(0.3, SOFT_BLUR_RADIUS * k);
-                pass(progB, tB.tex, tC, softR / TW, 0);
-                pass(progB, tC.tex, tD, 0, softR / TH);
+                pass(progB, tB.tex, tC, softR / tw, 0);
+                pass(progB, tC.tex, tD, 0, softR / th);
 
                 g.bindFramebuffer(g.FRAMEBUFFER, null);
-                g.viewport(0, 0, TW, TH);
+                g.viewport(0, 0, tw, th);
                 g.useProgram(progC.p);
                 g.uniform1i(progC.u.u_tex, 0);
                 g.uniform1i(progC.u.u_soft, 1);
@@ -506,7 +540,7 @@ void main() {
                 g.bindTexture(g.TEXTURE_2D, tB.tex);
                 g.activeTexture(g.TEXTURE1);
                 g.bindTexture(g.TEXTURE_2D, tD.tex);
-                g.uniform2f(progC.u.u_texel, 1 / TW, 1 / TH);
+                g.uniform2f(progC.u.u_texel, 1 / tw, 1 / th);
                 const u = progC.u;
                 g.uniform1f(u.u_exposure, n.exposure);
                 g.uniform1f(u.u_temperature, n.temperature);
@@ -526,7 +560,7 @@ void main() {
                 g.uniform1f(u.u_bwR, w[0]);
                 g.uniform1f(u.u_bwG, w[1]);
                 g.uniform1f(u.u_bwB, w[2]);
-                g.uniform1f(u.u_rot, 0);
+                g.uniform1f(u.u_rot, rot);
                 g.bindBuffer(g.ARRAY_BUFFER, quad);
                 g.enableVertexAttribArray(progC.a_pos);
                 g.vertexAttribPointer(progC.a_pos, 2, g.FLOAT, false, 0, 0);
@@ -827,10 +861,15 @@ void main() {
 
     async function activateItem(idx) {
         if (idx < 0 || idx >= items.length) return;
-        if (activeIndex >= 0 && items[activeIndex]) items[activeIndex].settings = { ...settings };
+        if (activeIndex >= 0 && items[activeIndex]) {
+            items[activeIndex].settings = { ...settings };
+            refreshPencil(items[activeIndex]);
+        }
         activeIndex = idx;
         image = items[idx];
         settings = { ...DEFAULTS, ...(image.settings || {}) };
+        compare = false;
+        el.compare.classList.remove('active');
         syncInputs();
         updateGalleryActive();
         updateUndoBtn();
@@ -842,18 +881,42 @@ void main() {
         showEditor();
         updateInfo();
         renderPresetThumbs();
+        refreshPencil(image, settings);
+        scheduleThumbUpdate();
         requestRender();
+    }
+
+    const PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
+
+    // оригинал (квадратный кроп по центру) в миниатюру
+    function drawOriginalThumb(item) {
+        const img = new Image();
+        img.onload = () => {
+            const cv = item.thumbCanvas;
+            if (!cv) return;
+            const sw = img.naturalWidth, sh = img.naturalHeight;
+            const side = Math.min(sw, sh);
+            const ctx = cv.getContext('2d');
+            ctx.clearRect(0, 0, cv.width, cv.height);
+            ctx.drawImage(img, (sw - side) / 2, (sh - side) / 2, side, side, 0, 0, cv.width, cv.height);
+        };
+        img.src = item.url;
     }
 
     function addThumb(item) {
         const btn = document.createElement('div');
         btn.className = 'gallery-item';
         btn.title = item.name;
-        const img = document.createElement('img');
-        img.src = item.url;
-        img.alt = item.name;
-        img.loading = 'lazy';
-        btn.appendChild(img);
+        const cv = document.createElement('canvas');
+        cv.width = 96; cv.height = 96;
+        cv.className = 'thumb-canvas';
+        btn.appendChild(cv);
+        const pencil = document.createElement('span');
+        pencil.className = 'pencil';
+        pencil.hidden = true;
+        pencil.title = 'Фото изменено';
+        pencil.innerHTML = PENCIL_SVG;
+        btn.appendChild(pencil);
         const rm = document.createElement('button');
         rm.type = 'button';
         rm.className = 'remove';
@@ -864,9 +927,22 @@ void main() {
             removeItem(items.indexOf(item));
         });
         btn.appendChild(rm);
-        btn.addEventListener('click', () => activateItem(items.indexOf(item)));
+        btn.addEventListener('click', () => {
+            const idx = items.indexOf(item);
+            if (idx === activeIndex) {
+                // клик по активной миниатюре — показать оригинал / вернуть правки
+                compare = !compare;
+                el.compare.classList.toggle('active', compare);
+                requestRender();
+            } else {
+                activateItem(idx);
+            }
+        });
         el.gallery.appendChild(btn);
         item.thumb = btn;
+        item.thumbCanvas = cv;
+        item.pencil = pencil;
+        drawOriginalThumb(item);
     }
 
     function updateGalleryActive() {
@@ -1019,6 +1095,8 @@ void main() {
                     num.value = v;
                     updateTrack(range);
                     requestRender();
+                    refreshPencil(items[activeIndex], settings);
+                    scheduleThumbUpdate();
                 };
 
                 // перетаскивание ползунка = одно действие в истории:
@@ -1104,6 +1182,8 @@ void main() {
                 settings = { ...DEFAULTS, ...preset.values };
                 syncInputs();
                 requestRender();
+                refreshPencil(items[activeIndex], settings);
+                scheduleThumbUpdate();
             });
             row.appendChild(chip);
             presetThumbs.push({ canvas: thumb, preset });
@@ -1113,10 +1193,10 @@ void main() {
     // перерисовываем превью всех пресетов для активного фото
     function renderPresetThumbs() {
         if (!sourceCanvas || !thumbRenderer) return;
-        thumbRenderer.setImage(sourceCanvas);
+        thumbRenderer.setImage(sourceCanvas, 256, 192);
         for (const { canvas, preset } of presetThumbs) {
             const s = { ...DEFAULTS, ...preset.values };
-            const rendered = thumbRenderer.render(normalizedSettings(s), bwWeights(s));
+            const rendered = thumbRenderer.render(normalizedSettings(s), bwWeights(s), 0);
             if (!rendered) return;
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1163,6 +1243,8 @@ void main() {
         settings = { ...DEFAULTS };
         syncInputs();
         requestRender();
+        refreshPencil(items[activeIndex], settings);
+        scheduleThumbUpdate();
     });
 
     el.undo.addEventListener('click', undo);
