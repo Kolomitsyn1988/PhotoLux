@@ -1,0 +1,18 @@
+# Build outputs
+bin/
+obj/
+out/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Runtime data: загруженные пользователями фото (временные)
+App_Data/
+
+# OS
+Thumbs.db
+.DS_Store

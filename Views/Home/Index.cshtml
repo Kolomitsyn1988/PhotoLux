@@ -1,0 +1,152 @@
+@{
+    ViewData["Title"] = "Photo Lux — редактор и конвертер фото";
+}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@ViewData["Title"]</title>
+    <script>
+        // Тему применяем до загрузки стилей, чтобы не было вспышки светлого
+        document.documentElement.dataset.theme = localStorage.getItem('photolux-theme') || 'light';
+    </script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%23ffa64d'/%3E%3Ccircle cx='24' cy='24' r='13' fill='none' stroke='white' stroke-width='3'/%3E%3Ccircle cx='24' cy='24' r='4.5' fill='white'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <svg class="logo" viewBox="0 0 42 42" width="34" height="34" aria-hidden="true">
+            <defs>
+                <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#ffb054" />
+                    <stop offset="1" stop-color="#ff8c42" />
+                </linearGradient>
+            </defs>
+            <rect x="1" y="1" width="40" height="40" rx="11" fill="url(#logoGrad)" />
+            <g transform="translate(5,5)">
+                <circle cx="16" cy="16" r="13" fill="none" stroke="#fff" stroke-width="2.3" />
+                <g stroke="#fff" stroke-width="2.3" stroke-linecap="round">
+                    <line x1="18.3" y1="10.7" x2="26.05" y2="24.2" />
+                    <line x1="13.7" y1="10.7" x2="29.2" y2="10.7" />
+                    <line x1="11.4" y1="16" x2="19.1" y2="2.55" />
+                    <line x1="13.7" y1="21.3" x2="5.95" y2="7.8" />
+                    <line x1="18.3" y1="21.3" x2="2.85" y2="21.3" />
+                    <line x1="20.6" y1="16" x2="12.9" y2="29.45" />
+                </g>
+            </g>
+        </svg>
+        <b>Photo Lux</b>
+    </div>
+    <div class="topbar-actions">
+        <button id="btnOpen" class="btn primary" type="button">Открыть фото</button>
+        <button id="btnCompare" class="btn" type="button" disabled title="Удерживайте, чтобы увидеть оригинал">Сравнить</button>
+        <button id="btnUndo" class="btn" type="button" disabled title="Отменить последнюю правку (Ctrl+Z)">↩ Отменить</button>
+        <button id="btnReset" class="btn" type="button" disabled title="Вернуть все ползунки в ноль">Сбросить</button>
+        <button id="btnClear" class="btn" type="button" disabled title="Убрать все фото из галереи">Очистить</button>
+        <div class="spacer"></div>
+        <button id="btnTheme" class="theme-switch" type="button" title="Переключить тему" aria-label="Переключить тему">
+            <span class="knob"></span>
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <button id="btnDownload" class="btn success" type="button" disabled>Скачать</button>
+    </div>
+    <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,image/bmp,image/gif" multiple hidden />
+</header>
+
+<main class="layout">
+    <div id="gallery" class="gallery" hidden></div>
+
+    <section id="stage" class="stage">
+        <div id="emptyState" class="empty-state" title="Нажмите, чтобы выбрать фотографии">
+            <div class="empty-icon">🖼️</div>
+            <h2>Перетащите фото сюда</h2>
+            <p>или нажмите здесь, чтобы выбрать, или вставьте изображение из буфера обмена (Ctrl+V)</p>
+            <p class="muted">Поддерживаются JPEG, PNG, WebP, BMP, GIF · до 40 МБ · можно выбрать сразу несколько</p>
+        </div>
+        <div id="canvasWrap" class="canvas-wrap" hidden>
+            <canvas id="glcanvas" hidden></canvas>
+        </div>
+        <div id="canvasBar" class="canvas-bar" hidden>
+            <span id="stageInfo" class="stage-info"></span>
+            <div class="zoom-controls">
+                <button id="rotateLeft" class="btn icon" type="button" title="Повернуть против часовой стрелки">↺</button>
+                <button id="rotateRight" class="btn icon" type="button" title="Повернуть по часовой стрелке">↻</button>
+                <span class="zoom-sep"></span>
+                <button id="zoomOut" class="btn icon" type="button" title="Уменьшить">−</button>
+                <span id="zoomLabel" class="zoom-label">100%</span>
+                <button id="zoomIn" class="btn icon" type="button" title="Увеличить">+</button>
+                <button id="zoomFit" class="btn" type="button" title="Вписать в окно">Вписать</button>
+            </div>
+        </div>
+        <div id="glError" class="gl-error" hidden>
+            WebGL недоступен в этом браузере — живой предпросмотр работать не будет.
+        </div>
+    </section>
+
+    <aside class="panel" id="panel">
+        <div class="tile histogram-tile">
+            <canvas id="histogram" width="256" height="90"></canvas>
+        </div>
+
+        <div class="panel-scroll">
+            <div id="presets"></div>
+            <div id="sliderGroups"></div>
+
+            <details class="tile group" open>
+                <summary>Экспорт</summary>
+                <div class="group-body">
+                    <div class="row">
+                        <span class="row-label">Формат</span>
+                        <div class="seg" id="formatSeg">
+                            <button type="button" data-format="jpeg" class="active">JPEG</button>
+                            <button type="button" data-format="png">PNG</button>
+                            <button type="button" data-format="webp">WebP</button>
+                        </div>
+                    </div>
+                    <div class="row slider-row" id="qualityRow">
+                        <label class="row-label" for="qualityRange">Качество</label>
+                        <input type="range" id="qualityRange" min="1" max="100" step="1" value="90" />
+                        <input type="number" id="qualityNum" min="1" max="100" step="1" value="90" aria-label="Качество, число" />
+                    </div>
+                    <div class="row resize-row">
+                        <span class="row-label">Размер, px</span>
+                        <input type="number" id="maxWidth" min="16" max="6000" placeholder="ширина" />
+                        <span class="muted">×</span>
+                        <input type="number" id="maxHeight" min="16" max="6000" placeholder="высота" />
+                    </div>
+                    <button id="btnExport" class="btn success wide" type="button" disabled>Скачать результат</button>
+                    <button id="btnExportGallery" class="btn wide" type="button" disabled
+                            title="Сохранить все фото галереи с их настройками одним ZIP-архивом">
+                        🗂 Сохранить галерею (ZIP)
+                    </button>
+                    <p class="muted small">Ползунки применяются к полноразмерному оригиналу на сервере.</p>
+                </div>
+            </details>
+        </div>
+    </aside>
+</main>
+
+<div id="busy" class="busy" hidden>
+    <div class="spinner"></div>
+    <div id="busyText">Обработка…</div>
+</div>
+
+<div id="modal" class="modal" hidden>
+    <div class="modal-card">
+        <h3 id="modalTitle">Подтверждение</h3>
+        <p id="modalText"></p>
+        <div class="modal-actions">
+            <button id="modalCancel" class="btn" type="button">Отмена</button>
+            <button id="modalOk" class="btn danger" type="button">ОК</button>
+        </div>
+    </div>
+</div>
+
+<div id="toasts" class="toasts"></div>
+
+<script src="~/js/editor.js"></script>
+</body>
+</html>
