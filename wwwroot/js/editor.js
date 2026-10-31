@@ -32,6 +32,7 @@
             'export.note': 'Ползунки применяются к полноразмерному оригиналу на сервере.',
             'ph.width': 'ширина', 'ph.height': 'высота',
             'curve.reset': 'Сбросить канал', 'curve.resetTitle': 'Сбросить кривую выбранного канала',
+            'badge.original': 'Оригинал',
             'label.dblReset': 'Двойной клик — сбросить',
             'pencil.title': 'Фото изменено',
             'thumb.remove': 'Убрать из галереи',
@@ -80,6 +81,7 @@
             'export.note': 'Adjustments are applied to the full-size original on the server.',
             'ph.width': 'width', 'ph.height': 'height',
             'curve.reset': 'Reset channel', 'curve.resetTitle': 'Reset the selected channel curve',
+            'badge.original': 'Original',
             'label.dblReset': 'Double-click to reset',
             'pencil.title': 'Edited',
             'thumb.remove': 'Remove from gallery',
@@ -315,7 +317,7 @@
         modal: $('modal'), modalTitle: $('modalTitle'), modalText: $('modalText'),
         modalOk: $('modalOk'), modalCancel: $('modalCancel'),
         fileInput: $('fileInput'), empty: $('emptyState'), canvas: $('glcanvas'), stage: $('stage'),
-        canvasWrap: $('canvasWrap'), canvasBar: $('canvasBar'),
+        canvasWrap: $('canvasWrap'), canvasBar: $('canvasBar'), origBadge: $('origBadge'),
         zoomIn: $('zoomIn'), zoomOut: $('zoomOut'), zoomFit: $('zoomFit'), zoomLabel: $('zoomLabel'),
         info: $('stageInfo'), glError: $('glError'), presets: $('presets'), groups: $('sliderGroups'),
         busy: $('busy'), busyText: $('busyText'), toasts: $('toasts'), gallery: $('gallery'),
@@ -361,6 +363,7 @@
     function undo() {
         const item = items[activeIndex];
         if (!item || !item.history || !item.history.length) return;
+        ensureEditMode();
         settings = cloneSettings(item.history.pop());
         item.settings = cloneSettings(settings);
         syncInputs();
@@ -373,6 +376,21 @@
     function updateUndoBtn() {
         const item = items[activeIndex];
         el.undo.disabled = !item || !item.history || item.history.length === 0;
+    }
+
+    // ---------- режим «показан оригинал» ----------
+    function setCompare(on) {
+        if (!image) on = false;
+        compare = on;
+        el.compare.classList.toggle('active', on);
+        el.origBadge.hidden = !on;
+        requestRender();
+    }
+
+    // любое редактирование автоматически выводит из режима оригинала,
+    // иначе правки «не видно» на предпросмотре
+    function ensureEditMode() {
+        if (compare) setCompare(false);
     }
 
     // ---------- признаки и превью правок в галерее ----------
@@ -1096,6 +1114,7 @@ void main() {
     }
 
     function curveChanged() {
+        ensureEditMode();
         drawCurveEditor();
         requestRender();
         refreshPencil(items[activeIndex], settings);
@@ -1301,6 +1320,7 @@ void main() {
         image = items[idx];
         settings = cloneSettings({ ...DEFAULTS, ...(image.settings || {}) });
         compare = false;
+        el.origBadge.hidden = true;
         el.compare.classList.remove('active');
         syncInputs();
         updateGalleryActive();
@@ -1363,9 +1383,7 @@ void main() {
             const idx = items.indexOf(item);
             if (idx === activeIndex) {
                 // клик по активной миниатюре — показать оригинал / вернуть правки
-                compare = !compare;
-                el.compare.classList.toggle('active', compare);
-                requestRender();
+                setCompare(!compare);
             } else {
                 activateItem(idx);
             }
@@ -1523,6 +1541,7 @@ void main() {
                 num.title = t('num.range', { label: lang === 'en' ? def.labelEn : def.label, min: def.min, max: def.max });
 
                 const apply = v => {
+                    ensureEditMode();
                     settings[def.key] = v;
                     range.value = v;
                     num.value = v;
@@ -1612,6 +1631,7 @@ void main() {
             label.textContent = lang === 'en' ? (preset.nameEn || preset.name) : preset.name;
             chip.append(thumb, label);
             chip.addEventListener('click', () => {
+                ensureEditMode();
                 pushHistory();
                 settings = cloneSettings({ ...DEFAULTS, ...preset.values });
                 syncInputs();
@@ -1665,14 +1685,15 @@ void main() {
         if (files.length) uploadFiles(files);
     });
 
-    const startCompare = () => { if (!image) return; compare = true; requestRender(); };
-    const stopCompare = () => { if (!compare) return; compare = false; requestRender(); };
+    const startCompare = () => { setCompare(true); };
+    const stopCompare = () => { setCompare(false); };
     el.compare.addEventListener('pointerdown', startCompare);
     el.compare.addEventListener('pointerup', stopCompare);
     el.compare.addEventListener('pointerleave', stopCompare);
     el.compare.addEventListener('pointercancel', stopCompare);
 
     el.reset.addEventListener('click', () => {
+        ensureEditMode();
         pushHistory();
         settings = cloneSettings(DEFAULTS);
         syncInputs();

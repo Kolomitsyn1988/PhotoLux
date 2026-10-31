@@ -339,6 +339,7 @@ html[data-theme="dark"] .theme-switch .knob { left: calc(100% - 25px); }
 .stage.dropping { outline: 2px dashed var(--accent); outline-offset: -10px; border-radius: 12px; }
 
 .canvas-wrap {
+    position: relative;
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
@@ -366,6 +367,24 @@ html[data-theme="dark"] .theme-switch .knob { left: calc(100% - 25px); }
     align-items: center;
     gap: 12px;
     min-height: 32px;
+}
+
+/* бейдж режима «показан оригинал» */
+.orig-badge {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    background: var(--glass);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    backdrop-filter: saturate(180%) blur(16px);
+    border-radius: 980px;
+    padding: 5px 14px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text);
+    box-shadow: var(--shadow-sm);
+    z-index: 5;
+    pointer-events: none;
 }
 
 .stage-info {
