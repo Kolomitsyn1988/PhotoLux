@@ -178,6 +178,30 @@ html[data-theme="dark"] .theme-switch .icon-moon { color: #c8c8d0; }
 
 html[data-theme="dark"] .theme-switch .knob { left: calc(100% - 25px); }
 
+/* переключатель языка RU/EN */
+.lang-switch {
+    display: flex;
+    flex: 0 0 auto;
+    border-radius: 8px;
+    box-shadow: inset 0 0 0 1px var(--separator);
+    overflow: hidden;
+}
+
+.lang-switch button {
+    padding: 6px 10px;
+    border: none;
+    background: var(--card-2);
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+}
+
+.lang-switch button + button { border-left: 1px solid var(--separator); }
+.lang-switch button.active { background: var(--orange); color: #fff; }
+
 .btn.primary { background: var(--orange); color: #fff; box-shadow: none; }
 .btn.primary:hover:not(:disabled) { background: var(--orange-hover); }
 

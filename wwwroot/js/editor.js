@@ -4,6 +4,137 @@
 (() => {
     'use strict';
 
+    // ---------- локализация ----------
+    let lang = localStorage.getItem('photolux-lang') || 'ru';
+
+    const I18N = {
+        ru: {
+            'btn.open': 'Открыть фото', 'btn.compare': 'Сравнить', 'btn.undo': '↩ Отменить',
+            'btn.reset': 'Сбросить', 'btn.clear': 'Очистить', 'btn.download': 'Скачать',
+            'btn.fit': 'Вписать',
+            'title.compare': 'Удерживайте, чтобы увидеть оригинал',
+            'title.undo': 'Отменить последнюю правку (Ctrl+Z)',
+            'title.reset': 'Вернуть все ползунки в ноль',
+            'title.clear': 'Убрать все фото из галереи',
+            'title.theme': 'Переключить тему',
+            'title.rotateLeft': 'Повернуть против часовой стрелки',
+            'title.rotateRight': 'Повернуть по часовой стрелке',
+            'title.zoomOut': 'Уменьшить', 'title.zoomIn': 'Увеличить',
+            'title.fit': 'Вписать в окно',
+            'empty.title': 'Перетащите фото сюда',
+            'empty.p1': 'или нажмите здесь, чтобы выбрать, или вставьте изображение из буфера обмена (Ctrl+V)',
+            'empty.p2': 'Поддерживаются JPEG, PNG, WebP, BMP, GIF · до 40 МБ · можно выбрать сразу несколько',
+            'empty.hint': 'Нажмите, чтобы выбрать фотографии',
+            'export.format': 'Формат', 'export.quality': 'Качество', 'export.size': 'Размер, px',
+            'export.result': 'Скачать результат',
+            'export.gallery': '🗂 Сохранить галерею (ZIP)',
+            'export.galleryTitle': 'Сохранить все фото галереи с их настройками одним ZIP-архивом',
+            'export.note': 'Ползунки применяются к полноразмерному оригиналу на сервере.',
+            'ph.width': 'ширина', 'ph.height': 'высота',
+            'curve.reset': 'Сбросить канал', 'curve.resetTitle': 'Сбросить кривую выбранного канала',
+            'label.dblReset': 'Двойной клик — сбросить',
+            'pencil.title': 'Фото изменено',
+            'thumb.remove': 'Убрать из галереи',
+            'modal.cancel': 'Отмена', 'modal.ok': 'Очистить',
+            'modal.clearTitle': 'Убрать все фото?',
+            'modal.clearText': 'Все загруженные фотографии и их настройки будут удалены из галереи. Это действие нельзя отменить.',
+            'toast.cleared': 'Галерея очищена',
+            'toast.saved': 'Файл сохранён: {name}',
+            'toast.archive': 'Архив сохранён: {n} фото',
+            'toast.exportError': 'Ошибка экспорта: {m}',
+            'toast.openFail': 'Не удалось открыть фото: {m}',
+            'toast.imgFail': 'Не удалось загрузить изображение с сервера',
+            'toast.formats': 'Поддерживаются JPEG, PNG, WebP, BMP, GIF',
+            'toast.loadFail': 'Не удалось загрузить фото из буфера обмена',
+            'busy.processing': 'Обработка…', 'busy.uploading': 'Загрузка…',
+            'busy.uploadingN': 'Загрузка {i} из {n}…',
+            'busy.export': 'Готовим файл…', 'busy.archive': 'Готовим архив ({n})…',
+            'busy.import': 'Загрузка…',
+            'info.preview': 'предпросмотр',
+            'preset.basic': 'Базовые', 'preset.instagram': 'Instagram', 'preset.lightroom': 'Lightroom',
+            'num.range': '{label}: от {min} до {max}',
+            'err.loadImage': 'Не удалось загрузить изображение с сервера',
+            'err.noImage': 'Файл не передан.'
+        },
+        en: {
+            'btn.open': 'Open photo', 'btn.compare': 'Compare', 'btn.undo': '↩ Undo',
+            'btn.reset': 'Reset', 'btn.clear': 'Clear', 'btn.download': 'Download',
+            'btn.fit': 'Fit',
+            'title.compare': 'Hold to see the original',
+            'title.undo': 'Undo the last edit (Ctrl+Z)',
+            'title.reset': 'Reset all sliders to zero',
+            'title.clear': 'Remove all photos from the gallery',
+            'title.theme': 'Toggle theme',
+            'title.rotateLeft': 'Rotate counterclockwise',
+            'title.rotateRight': 'Rotate clockwise',
+            'title.zoomOut': 'Zoom out', 'title.zoomIn': 'Zoom in',
+            'title.fit': 'Fit to window',
+            'empty.title': 'Drop photos here',
+            'empty.p1': 'or click here to choose files, or paste an image from the clipboard (Ctrl+V)',
+            'empty.p2': 'JPEG, PNG, WebP, BMP, GIF supported · up to 40 MB · multiple files allowed',
+            'empty.hint': 'Click to choose photos',
+            'export.format': 'Format', 'export.quality': 'Quality', 'export.size': 'Size, px',
+            'export.result': 'Download result',
+            'export.gallery': '🗂 Save gallery (ZIP)',
+            'export.galleryTitle': 'Save all gallery photos with their settings as one ZIP archive',
+            'export.note': 'Adjustments are applied to the full-size original on the server.',
+            'ph.width': 'width', 'ph.height': 'height',
+            'curve.reset': 'Reset channel', 'curve.resetTitle': 'Reset the selected channel curve',
+            'label.dblReset': 'Double-click to reset',
+            'pencil.title': 'Edited',
+            'thumb.remove': 'Remove from gallery',
+            'modal.cancel': 'Cancel', 'modal.ok': 'Clear',
+            'modal.clearTitle': 'Remove all photos?',
+            'modal.clearText': 'All uploaded photos and their settings will be removed from the gallery. This cannot be undone.',
+            'toast.cleared': 'Gallery cleared',
+            'toast.saved': 'File saved: {name}',
+            'toast.archive': 'Archive saved: {n} photos',
+            'toast.exportError': 'Export error: {m}',
+            'toast.openFail': 'Failed to open photo: {m}',
+            'toast.imgFail': 'Failed to load the image from the server',
+            'toast.formats': 'JPEG, PNG, WebP, BMP, GIF supported',
+            'toast.loadFail': 'Failed to load photo from clipboard',
+            'busy.processing': 'Processing…', 'busy.uploading': 'Uploading…',
+            'busy.uploadingN': 'Uploading {i} of {n}…',
+            'busy.export': 'Preparing file…', 'busy.archive': 'Preparing archive ({n})…',
+            'busy.import': 'Loading…',
+            'info.preview': 'preview',
+            'preset.basic': 'Basic', 'preset.instagram': 'Instagram', 'preset.lightroom': 'Lightroom',
+            'num.range': '{label}: from {min} to {max}',
+            'err.loadImage': 'Failed to load the image from the server',
+            'err.noImage': 'No file provided.'
+        }
+    };
+
+    function t(key, params) {
+        let s = (I18N[lang] && I18N[lang][key]) ?? I18N.ru[key] ?? key;
+        if (params) for (const k in params) s = s.split('{' + k + '}').join(params[k]);
+        return s;
+    }
+
+    function applyLang() {
+        document.documentElement.lang = lang;
+        localStorage.setItem('photolux-lang', lang);
+        document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t(el.dataset.i18n));
+        document.querySelectorAll('[data-i18n-title]').forEach(el => el.title = t(el.dataset.i18nTitle));
+        document.querySelectorAll('[data-i18n-ph]').forEach(el => el.placeholder = t(el.dataset.i18nPh));
+        for (const b of el.langSwitch.querySelectorAll('button'))
+            b.classList.toggle('active', b.dataset.lang === lang);
+        rebuildDynamicPanels();
+    }
+
+    // пересборка языко-зависимых панелей (значения настроек сохраняются)
+    function rebuildDynamicPanels() {
+        el.groups.innerHTML = '';
+        el.presets.innerHTML = '';
+        presetThumbs.length = 0;
+        for (const k in inputsByKey) delete inputsByKey[k];
+        buildPanel();
+        buildPresets();
+        syncInputs();
+        renderPresetThumbs();
+    }
+
     // ---------- состояние ----------
     const IDENTITY_CURVE = [[0, 0], [1, 1]];
     const DEFAULTS = {
@@ -100,79 +231,79 @@
     const MAX_TEXTURE_DIM = 2048;
 
     const GROUPS = [
-        { id: 'light',   title: 'Свет и тон' },
-        { id: 'color',   title: 'Цвет' },
-        { id: 'face',    title: 'Портрет' },
-        { id: 'detail',  title: 'Детализация' },
-        { id: 'effects', title: 'Эффекты' },
-        { id: 'bw',      title: 'Ч/Б микс' }
+        { id: 'light',   title: 'Свет и тон', titleEn: 'Light' },
+        { id: 'color',   title: 'Цвет', titleEn: 'Color' },
+        { id: 'face',    title: 'Портрет', titleEn: 'Portrait' },
+        { id: 'detail',  title: 'Детализация', titleEn: 'Detail' },
+        { id: 'effects', title: 'Эффекты', titleEn: 'Effects' },
+        { id: 'bw',      title: 'Ч/Б микс', titleEn: 'B&W mix' }
     ];
 
     const SLIDERS = [
-        { key: 'exposure',    group: 'light',   label: 'Экспозиция',   min: -3,   max: 3,   step: 0.01 },
-        { key: 'brightness',  group: 'light',   label: 'Яркость',      min: -100, max: 100, step: 1 },
-        { key: 'contrast',    group: 'light',   label: 'Контраст',     min: -100, max: 100, step: 1 },
-        { key: 'gamma',       group: 'light',   label: 'Гамма',        min: 0.2,  max: 2.2, step: 0.01 },
-        { key: 'temperature', group: 'color',   label: 'Температура',  min: -100, max: 100, step: 1 },
-        { key: 'hue',         group: 'color',   label: 'Оттенок',      min: -180, max: 180, step: 1 },
-        { key: 'saturation',  group: 'color',   label: 'Насыщенность', min: -100, max: 100, step: 1 },
-        { key: 'vibrance',    group: 'color',   label: 'Красочность',  min: -100, max: 100, step: 1 },
-        { key: 'skin',        group: 'face',    label: 'Смягчение кожи', min: 0,  max: 100, step: 1 },
-        { key: 'glow',        group: 'face',    label: 'Сияние',       min: 0,    max: 100, step: 1 },
-        { key: 'sharpen',     group: 'detail',  label: 'Резкость',     min: 0,    max: 100, step: 1 },
-        { key: 'blur',        group: 'detail',  label: 'Размытие',     min: 0,    max: 10,  step: 0.1 },
-        { key: 'vignette',    group: 'effects', label: 'Виньетка',     min: 0,    max: 100, step: 1 },
-        { key: 'grayscale',   group: 'bw',      label: 'Обесцвечивание', min: 0,  max: 100, step: 1 },
-        { key: 'bwRed',       group: 'bw',      label: 'Красные',      min: -100, max: 100, step: 1 },
-        { key: 'bwGreen',     group: 'bw',      label: 'Зелёные',      min: -100, max: 100, step: 1 },
-        { key: 'bwBlue',      group: 'bw',      label: 'Синие',        min: -100, max: 100, step: 1 },
-        { key: 'sepia',       group: 'effects', label: 'Сепия',        min: 0,    max: 100, step: 1 },
-        { key: 'blue',        group: 'effects', label: 'Синий оттенок', min: 0,   max: 100, step: 1 }
+        { key: 'exposure',    group: 'light',   label: 'Экспозиция',   labelEn: 'Exposure',      min: -3,   max: 3,   step: 0.01 },
+        { key: 'brightness',  group: 'light',   label: 'Яркость',      labelEn: 'Brightness',    min: -100, max: 100, step: 1 },
+        { key: 'contrast',    group: 'light',   label: 'Контраст',     labelEn: 'Contrast',      min: -100, max: 100, step: 1 },
+        { key: 'gamma',       group: 'light',   label: 'Гамма',        labelEn: 'Gamma',         min: 0.2,  max: 2.2, step: 0.01 },
+        { key: 'temperature', group: 'color',   label: 'Температура',  labelEn: 'Temperature',   min: -100, max: 100, step: 1 },
+        { key: 'hue',         group: 'color',   label: 'Оттенок',      labelEn: 'Hue',           min: -180, max: 180, step: 1 },
+        { key: 'saturation',  group: 'color',   label: 'Насыщенность', labelEn: 'Saturation',    min: -100, max: 100, step: 1 },
+        { key: 'vibrance',    group: 'color',   label: 'Красочность',  labelEn: 'Vibrance',      min: -100, max: 100, step: 1 },
+        { key: 'skin',        group: 'face',    label: 'Смягчение кожи', labelEn: 'Skin smoothing', min: 0, max: 100, step: 1 },
+        { key: 'glow',        group: 'face',    label: 'Сияние',       labelEn: 'Glow',          min: 0,    max: 100, step: 1 },
+        { key: 'sharpen',     group: 'detail',  label: 'Резкость',     labelEn: 'Sharpen',       min: 0,    max: 100, step: 1 },
+        { key: 'blur',        group: 'detail',  label: 'Размытие',     labelEn: 'Blur',          min: 0,    max: 10,  step: 0.1 },
+        { key: 'vignette',    group: 'effects', label: 'Виньетка',     labelEn: 'Vignette',      min: 0,    max: 100, step: 1 },
+        { key: 'grayscale',   group: 'bw',      label: 'Обесцвечивание', labelEn: 'Desaturate',  min: 0,    max: 100, step: 1 },
+        { key: 'bwRed',       group: 'bw',      label: 'Красные',      labelEn: 'Reds',          min: -100, max: 100, step: 1 },
+        { key: 'bwGreen',     group: 'bw',      label: 'Зелёные',      labelEn: 'Greens',        min: -100, max: 100, step: 1 },
+        { key: 'bwBlue',      group: 'bw',      label: 'Синие',        labelEn: 'Blues',         min: -100, max: 100, step: 1 },
+        { key: 'sepia',       group: 'effects', label: 'Сепия',        labelEn: 'Sepia',         min: 0,    max: 100, step: 1 },
+        { key: 'blue',        group: 'effects', label: 'Синий оттенок', labelEn: 'Blue tint',    min: 0,    max: 100, step: 1 }
     ];
 
     const PRESETS = [
         // --- базовые ---
-        { group: 'Базовые', name: 'Оригинал',        values: {} },
-        { group: 'Базовые', name: 'Тёплый вечер',    values: { exposure: 0.15, temperature: 35, vibrance: 20, vignette: 25, saturation: 5 } },
-        { group: 'Базовые', name: 'Холодный рассвет',values: { exposure: 0.1, temperature: -30, contrast: 10, saturation: -5 } },
-        { group: 'Базовые', name: 'Нуар',            values: { grayscale: 100, contrast: 25, vignette: 40, sharpen: 15 } },
-        { group: 'Базовые', name: 'Вивиант',         values: { exposure: 0.1, vibrance: 45, saturation: 10, contrast: 8, sharpen: 10 } },
-        { group: 'Базовые', name: 'Мягкий фокус',    values: { blur: 1.2, brightness: 4, saturation: 8, vignette: 20 } },
+        { group: 'basic', name: 'Оригинал', nameEn: 'Original',        values: {} },
+        { group: 'basic', name: 'Тёплый вечер', nameEn: 'Warm evening',    values: { exposure: 0.15, temperature: 35, vibrance: 20, vignette: 25, saturation: 5 } },
+        { group: 'basic', name: 'Холодный рассвет', nameEn: 'Cold dawn',values: { exposure: 0.1, temperature: -30, contrast: 10, saturation: -5 } },
+        { group: 'basic', name: 'Нуар', nameEn: 'Noir',            values: { grayscale: 100, contrast: 25, vignette: 40, sharpen: 15 } },
+        { group: 'basic', name: 'Вивиант', nameEn: 'Vivid',         values: { exposure: 0.1, vibrance: 45, saturation: 10, contrast: 8, sharpen: 10 } },
+        { group: 'basic', name: 'Мягкий фокус', nameEn: 'Soft focus',    values: { blur: 1.2, brightness: 4, saturation: 8, vignette: 20 } },
 
         // --- в духе Instagram ---
-        { group: 'Instagram', name: 'Clarendon',  values: { exposure: 0.12, contrast: 22, saturation: 25, sharpen: 10 } },
-        { group: 'Instagram', name: 'Gingham',    values: { contrast: -15, brightness: 6, saturation: -18, sepia: 18, vignette: 15 } },
-        { group: 'Instagram', name: 'Moon',       values: { grayscale: 100, contrast: 18, brightness: 5, sharpen: 12 } },
-        { group: 'Instagram', name: 'Lark',       values: { exposure: 0.22, vibrance: 30, temperature: 12, saturation: 6 } },
-        { group: 'Instagram', name: 'Reyes',      values: { exposure: 0.1, contrast: -20, brightness: 8, saturation: -25, sepia: 22 } },
-        { group: 'Instagram', name: 'Juno',       values: { contrast: 12, saturation: 28, temperature: 10, sharpen: 15 } },
-        { group: 'Instagram', name: 'Ludwig',     values: { contrast: 15, saturation: 15, temperature: -12, sharpen: 10 } },
-        { group: 'Instagram', name: 'Aden',       values: { brightness: 8, contrast: -10, saturation: -30, temperature: -20 } },
-        { group: 'Instagram', name: 'Slumber',    values: { contrast: -12, brightness: 6, saturation: -22, sepia: 15, vignette: 12 } },
-        { group: 'Instagram', name: 'Crema',      values: { saturation: -18, contrast: -8, sepia: 12, gamma: 1.05, vignette: 10 } },
-        { group: 'Instagram', name: 'Perpetua',   values: { contrast: 10, saturation: 12, temperature: -10, blue: 15 } },
-        { group: 'Instagram', name: 'Amaro',      values: { exposure: 0.1, contrast: 8, saturation: 10, glow: 25, vignette: 15 } },
-        { group: 'Instagram', name: 'Hudson',     values: { contrast: 18, temperature: -20, blue: 20, vignette: 25 } },
-        { group: 'Instagram', name: 'Valencia',   values: { exposure: 0.12, saturation: 12, sepia: 18, contrast: -5, vignette: 10 } },
-        { group: 'Instagram', name: 'Nashville',  values: { contrast: 10, sepia: 20, temperature: 10, brightness: 5, vignette: 12 } },
-        { group: 'Instagram', name: '1977',       values: { contrast: 12, saturation: 20, temperature: 15, exposure: 0.05, vignette: 15 } },
-        { group: 'Instagram', name: 'Lo-Fi',      values: { contrast: 25, saturation: 35, vignette: 30, sharpen: 12 } },
-        { group: 'Instagram', name: 'Willow',     values: { grayscale: 90, brightness: 8, contrast: -8, sepia: 10, vignette: 20 } },
+        { group: 'instagram', name: 'Clarendon',  values: { exposure: 0.12, contrast: 22, saturation: 25, sharpen: 10 } },
+        { group: 'instagram', name: 'Gingham',    values: { contrast: -15, brightness: 6, saturation: -18, sepia: 18, vignette: 15 } },
+        { group: 'instagram', name: 'Moon',       values: { grayscale: 100, contrast: 18, brightness: 5, sharpen: 12 } },
+        { group: 'instagram', name: 'Lark',       values: { exposure: 0.22, vibrance: 30, temperature: 12, saturation: 6 } },
+        { group: 'instagram', name: 'Reyes',      values: { exposure: 0.1, contrast: -20, brightness: 8, saturation: -25, sepia: 22 } },
+        { group: 'instagram', name: 'Juno',       values: { contrast: 12, saturation: 28, temperature: 10, sharpen: 15 } },
+        { group: 'instagram', name: 'Ludwig',     values: { contrast: 15, saturation: 15, temperature: -12, sharpen: 10 } },
+        { group: 'instagram', name: 'Aden',       values: { brightness: 8, contrast: -10, saturation: -30, temperature: -20 } },
+        { group: 'instagram', name: 'Slumber',    values: { contrast: -12, brightness: 6, saturation: -22, sepia: 15, vignette: 12 } },
+        { group: 'instagram', name: 'Crema',      values: { saturation: -18, contrast: -8, sepia: 12, gamma: 1.05, vignette: 10 } },
+        { group: 'instagram', name: 'Perpetua',   values: { contrast: 10, saturation: 12, temperature: -10, blue: 15 } },
+        { group: 'instagram', name: 'Amaro',      values: { exposure: 0.1, contrast: 8, saturation: 10, glow: 25, vignette: 15 } },
+        { group: 'instagram', name: 'Hudson',     values: { contrast: 18, temperature: -20, blue: 20, vignette: 25 } },
+        { group: 'instagram', name: 'Valencia',   values: { exposure: 0.12, saturation: 12, sepia: 18, contrast: -5, vignette: 10 } },
+        { group: 'instagram', name: 'Nashville',  values: { contrast: 10, sepia: 20, temperature: 10, brightness: 5, vignette: 12 } },
+        { group: 'instagram', name: '1977',       values: { contrast: 12, saturation: 20, temperature: 15, exposure: 0.05, vignette: 15 } },
+        { group: 'instagram', name: 'Lo-Fi',      values: { contrast: 25, saturation: 35, vignette: 30, sharpen: 12 } },
+        { group: 'instagram', name: 'Willow',     values: { grayscale: 90, brightness: 8, contrast: -8, sepia: 10, vignette: 20 } },
 
         // --- в духе Lightroom ---
-        { group: 'Lightroom', name: 'Контраст',      values: { contrast: 30, vibrance: 25, sharpen: 20 } },
-        { group: 'Lightroom', name: 'Матовый',       values: { contrast: -18, brightness: 6, saturation: -18, gamma: 1.08, vignette: 18 } },
-        { group: 'Lightroom', name: 'Кино',          values: { temperature: 25, contrast: 20, saturation: 8, vignette: 25, sharpen: 10 } },
-        { group: 'Lightroom', name: 'Драма',         values: { contrast: 40, sharpen: 25, vignette: 35, saturation: -10 } },
-        { group: 'Lightroom', name: 'Плёнка',        values: { contrast: 12, saturation: -8, sepia: 12, gamma: 1.05, vignette: 20 } },
-        { group: 'Lightroom', name: 'Холод',         values: { blue: 40, contrast: 10 } },
-        { group: 'Lightroom', name: 'Золотой час',   values: { exposure: 0.15, temperature: 40, vibrance: 20, vignette: 18, glow: 20 } },
-        { group: 'Lightroom', name: 'Муди',          values: { exposure: -0.15, contrast: 18, saturation: -20, temperature: -15, vignette: 30 } },
-        { group: 'Lightroom', name: 'Вельвия',       values: { saturation: 40, contrast: 20, vibrance: 15, sharpen: 15 } },
-        { group: 'Lightroom', name: 'Блейкаут',      values: { saturation: -55, contrast: 25, brightness: 8, sharpen: 10 } },
-        { group: 'Lightroom', name: 'Кросс-процесс', values: { temperature: -15, hue: 15, contrast: 15, saturation: 10, blue: 12 } },
-        { group: 'Lightroom', name: 'Ч/Б Контраст',  values: { grayscale: 100, contrast: 30, bwRed: 30, bwBlue: -40 } },
-        { group: 'Lightroom', name: 'Портрет',       values: { skin: 45, glow: 15, exposure: 0.08, vibrance: 10 } }
+        { group: 'lightroom', name: 'Контраст', nameEn: 'Contrast',      values: { contrast: 30, vibrance: 25, sharpen: 20 } },
+        { group: 'lightroom', name: 'Матовый', nameEn: 'Matte',       values: { contrast: -18, brightness: 6, saturation: -18, gamma: 1.08, vignette: 18 } },
+        { group: 'lightroom', name: 'Кино', nameEn: 'Cinematic',          values: { temperature: 25, contrast: 20, saturation: 8, vignette: 25, sharpen: 10 } },
+        { group: 'lightroom', name: 'Драма', nameEn: 'Drama',         values: { contrast: 40, sharpen: 25, vignette: 35, saturation: -10 } },
+        { group: 'lightroom', name: 'Плёнка', nameEn: 'Film',        values: { contrast: 12, saturation: -8, sepia: 12, gamma: 1.05, vignette: 20 } },
+        { group: 'lightroom', name: 'Холод', nameEn: 'Cold',         values: { blue: 40, contrast: 10 } },
+        { group: 'lightroom', name: 'Золотой час', nameEn: 'Golden hour',   values: { exposure: 0.15, temperature: 40, vibrance: 20, vignette: 18, glow: 20 } },
+        { group: 'lightroom', name: 'Муди', nameEn: 'Moody',          values: { exposure: -0.15, contrast: 18, saturation: -20, temperature: -15, vignette: 30 } },
+        { group: 'lightroom', name: 'Вельвия', nameEn: 'Velvia',       values: { saturation: 40, contrast: 20, vibrance: 15, sharpen: 15 } },
+        { group: 'lightroom', name: 'Блейкаут', nameEn: 'Bleach',      values: { saturation: -55, contrast: 25, brightness: 8, sharpen: 10 } },
+        { group: 'lightroom', name: 'Кросс-процесс', nameEn: 'Cross process', values: { temperature: -15, hue: 15, contrast: 15, saturation: 10, blue: 12 } },
+        { group: 'lightroom', name: 'Ч/Б Контраст', nameEn: 'B&W Contrast',  values: { grayscale: 100, contrast: 30, bwRed: 30, bwBlue: -40 } },
+        { group: 'lightroom', name: 'Портрет', nameEn: 'Portrait',       values: { skin: 45, glow: 15, exposure: 0.08, vibrance: 10 } }
     ];
 
     const $ = id => document.getElementById(id);
@@ -191,7 +322,8 @@
         formatSeg: $('formatSeg'), qualityRow: $('qualityRow'), qualityRange: $('qualityRange'),
         qualityNum: $('qualityNum'), maxWidth: $('maxWidth'), maxHeight: $('maxHeight'),
         btnExport: $('btnExport'), histogram: $('histogram'),
-        curveEditor: $('curveEditor'), curvesChannels: $('curvesChannels'), btnResetCurve: $('btnResetCurve')
+        curveEditor: $('curveEditor'), curvesChannels: $('curvesChannels'), btnResetCurve: $('btnResetCurve'),
+        langSwitch: $('langSwitch')
     };
 
     // ---------- зум предпросмотра (100% = вписано в окно) ----------
@@ -284,8 +416,8 @@
         setTimeout(() => t.remove(), 4500);
     }
 
-    function busy(on, text = 'Обработка…') {
-        el.busyText.textContent = text;
+    function busy(on, text) {
+        el.busyText.textContent = text || t('busy.processing');
         el.busy.hidden = !on;
     }
 
@@ -1053,7 +1185,7 @@ void main() {
         // изредка не завершается в Chromium и вечно держит оверлей загрузки
         await new Promise((resolve, reject) => {
             img.onload = resolve;
-            img.onerror = () => reject(new Error('Не удалось загрузить изображение с сервера'));
+            img.onerror = () => reject(new Error(t('err.loadImage')));
             img.src = url;
         });
 
@@ -1117,21 +1249,21 @@ void main() {
 
     function updateInfo() {
         const out = outDims();
-        el.info.textContent = `${image.name} · ${image.width}×${image.height} · предпросмотр ${out.w}×${out.h}`;
+        el.info.textContent = `${image.name} · ${image.width}×${image.height} · ${t('info.preview')} ${out.w}×${out.h}`;
     }
 
     async function uploadFiles(fileList) {
         const files = [...fileList].filter(f => /\.(jpe?g|png|webp|bmp|gif)$/i.test(f.name));
         if (!files.length) {
-            toast('Поддерживаются JPEG, PNG, WebP, BMP, GIF', true);
+            toast(t('toast.formats'), true);
             return;
         }
         uploading = true;
-        busy(true, files.length > 1 ? `Загрузка 1 из ${files.length}…` : 'Загрузка…');
+        busy(true, files.length > 1 ? t('busy.uploadingN', { i: 1, n: files.length }) : t('busy.uploading'));
         let firstNew = null;
         try {
             for (let i = 0; i < files.length; i++) {
-                if (files.length > 1) busy(true, `Загрузка ${i + 1} из ${files.length}…`);
+                if (files.length > 1) busy(true, t('busy.uploadingN', { i: i + 1, n: files.length }));
                 const fd = new FormData();
                 fd.append('file', files[i], files[i].name);
                 const resp = await fetch('/api/images/upload', { method: 'POST', body: fd });
@@ -1146,7 +1278,7 @@ void main() {
             el.gallery.hidden = false;
             if (firstNew) await activateItem(items.indexOf(firstNew));
         } catch (e) {
-            toast('Не удалось открыть фото: ' + e.message, true);
+            toast(t('toast.openFail', { m: e.message }), true);
         } finally {
             uploading = false;
             busy(false);
@@ -1208,14 +1340,14 @@ void main() {
         const pencil = document.createElement('span');
         pencil.className = 'pencil';
         pencil.hidden = true;
-        pencil.title = 'Фото изменено';
+        pencil.title = t('pencil.title');
         pencil.innerHTML = PENCIL_SVG;
         btn.appendChild(pencil);
         const rm = document.createElement('button');
         rm.type = 'button';
         rm.className = 'remove';
         rm.textContent = '×';
-        rm.title = 'Убрать из галереи';
+        rm.title = t('thumb.remove');
         rm.addEventListener('click', e => {
             e.stopPropagation();
             removeItem(items.indexOf(item));
@@ -1279,14 +1411,14 @@ void main() {
     function clearGallery() {
         if (!items.length) return;
         showModal({
-            title: 'Убрать все фото?',
-            text: 'Все загруженные фотографии и их настройки будут удалены из галереи. Это действие нельзя отменить.',
-            okLabel: 'Очистить',
+            title: t('modal.clearTitle'),
+            text: t('modal.clearText'),
+            okLabel: t('modal.ok'),
             onOk: () => {
                 for (const it of items) it.thumb.remove();
                 items = [];
                 resetToEmptyState();
-                toast('Галерея очищена');
+                toast(t('toast.cleared'));
             }
         });
     }
@@ -1294,8 +1426,8 @@ void main() {
     // ---------- экспорт ----------
     async function exportImage() {
         if (!image) return;
-        items[activeIndex].settings = { ...settings };
-        busy(true, 'Готовим файл…');
+        items[activeIndex].settings = cloneSettings(settings);
+        busy(true, t('busy.export'));
         try {
             const body = {
                 id: image.id,
@@ -1321,9 +1453,9 @@ void main() {
             a.click();
             a.remove();
             setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-            toast('Файл сохранён: ' + a.download);
+            toast(t('toast.saved', { name: a.download }));
         } catch (e) {
-            toast('Ошибка экспорта: ' + e.message, true);
+            toast(t('toast.exportError', { m: e.message }), true);
         } finally {
             busy(false);
         }
@@ -1342,13 +1474,14 @@ void main() {
     }
 
     function buildPanel() {
+        for (const k in inputsByKey) delete inputsByKey[k];
         for (const group of GROUPS) {
             const details = document.createElement('details');
             details.className = 'tile group';
             details.open = true;
 
             const summary = document.createElement('summary');
-            summary.textContent = group.title;
+            summary.textContent = lang === 'en' ? group.titleEn : group.title;
             details.appendChild(summary);
 
             const body = document.createElement('div');
@@ -1360,9 +1493,9 @@ void main() {
 
                 const label = document.createElement('label');
                 label.className = 'row-label';
-                label.textContent = def.label;
+                label.textContent = lang === 'en' ? def.labelEn : def.label;
                 label.htmlFor = 'sl-' + def.key;
-                label.title = 'Двойной клик — сбросить';
+                label.title = t('label.dblReset');
 
                 const range = document.createElement('input');
                 range.type = 'range';
@@ -1380,8 +1513,8 @@ void main() {
                 num.max = def.max;
                 num.step = def.step;
                 num.value = settings[def.key];
-                num.setAttribute('aria-label', def.label + ', ручной ввод');
-                num.title = `${def.label}: от ${def.min} до ${def.max}`;
+                num.setAttribute('aria-label', (lang === 'en' ? def.labelEn : def.label) + ', manual input');
+                num.title = t('num.range', { label: lang === 'en' ? def.labelEn : def.label, min: def.min, max: def.max });
 
                 const apply = v => {
                     settings[def.key] = v;
@@ -1450,6 +1583,7 @@ void main() {
     }
 
     function buildPresets() {
+        presetThumbs.length = 0;
         let currentGroup = null;
         let row = null;
         for (const preset of PRESETS) {
@@ -1457,7 +1591,7 @@ void main() {
                 currentGroup = preset.group;
                 const title = document.createElement('div');
                 title.className = 'presets-group-title';
-                title.textContent = currentGroup;
+                title.textContent = t('preset.' + currentGroup);
                 el.presets.appendChild(title);
                 row = document.createElement('div');
                 row.className = 'preset-row';
@@ -1469,7 +1603,7 @@ void main() {
             const thumb = document.createElement('canvas');
             thumb.width = 128; thumb.height = 96;
             const label = document.createElement('span');
-            label.textContent = preset.name;
+            label.textContent = lang === 'en' ? (preset.nameEn || preset.name) : preset.name;
             chip.append(thumb, label);
             chip.addEventListener('click', () => {
                 pushHistory();
@@ -1579,7 +1713,7 @@ void main() {
     el.exportGallery.addEventListener('click', async () => {
         if (!items.length || uploading) return;
         if (activeIndex >= 0 && items[activeIndex]) items[activeIndex].settings = cloneSettings(settings);
-        busy(true, `Готовим архив (${items.length})…`);
+        busy(true, t('busy.archive', { n: items.length }));
         try {
             const body = {
                 format: exportFormat,
@@ -1607,9 +1741,9 @@ void main() {
             a.click();
             a.remove();
             setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-            toast(`Архив сохранён: ${items.length} фото`);
+            toast(t('toast.archive', { n: items.length }));
         } catch (e) {
-            toast('Ошибка экспорта галереи: ' + e.message, true);
+            toast(t('toast.exportError', { m: e.message }), true);
         } finally {
             busy(false);
         }
@@ -1645,7 +1779,12 @@ void main() {
     });
 
     // ---------- старт ----------
-    buildPanel();
-    buildPresets();
+    el.langSwitch.addEventListener('click', e => {
+        const b = e.target.closest('button[data-lang]');
+        if (!b || b.dataset.lang === lang) return;
+        lang = b.dataset.lang;
+        applyLang();
+    });
+    applyLang();
     drawCurveEditor();
 })();

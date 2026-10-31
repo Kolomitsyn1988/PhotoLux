@@ -8,8 +8,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>@ViewData["Title"]</title>
     <script>
-        // Тему применяем до загрузки стилей, чтобы не было вспышки светлого
+        // Тему и язык применяем до загрузки стилей, чтобы не было вспышки
         document.documentElement.dataset.theme = localStorage.getItem('photolux-theme') || 'light';
+        document.documentElement.lang = localStorage.getItem('photolux-lang') || 'ru';
     </script>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%23ffa64d'/%3E%3Ccircle cx='24' cy='24' r='13' fill='none' stroke='white' stroke-width='3'/%3E%3Ccircle cx='24' cy='24' r='4.5' fill='white'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="~/css/site.css" />
@@ -40,13 +41,17 @@
         <b>Photo Lux</b>
     </div>
     <div class="topbar-actions">
-        <button id="btnOpen" class="btn primary" type="button">Открыть фото</button>
-        <button id="btnCompare" class="btn" type="button" disabled title="Удерживайте, чтобы увидеть оригинал">Сравнить</button>
-        <button id="btnUndo" class="btn" type="button" disabled title="Отменить последнюю правку (Ctrl+Z)">↩ Отменить</button>
-        <button id="btnReset" class="btn" type="button" disabled title="Вернуть все ползунки в ноль">Сбросить</button>
-        <button id="btnClear" class="btn" type="button" disabled title="Убрать все фото из галереи">Очистить</button>
+        <button id="btnOpen" class="btn primary" type="button" data-i18n="btn.open">Открыть фото</button>
+        <button id="btnCompare" class="btn" type="button" disabled data-i18n="btn.compare" data-i18n-title="title.compare">Сравнить</button>
+        <button id="btnUndo" class="btn" type="button" disabled data-i18n="btn.undo" data-i18n-title="title.undo">↩ Отменить</button>
+        <button id="btnReset" class="btn" type="button" disabled data-i18n="btn.reset" data-i18n-title="title.reset">Сбросить</button>
+        <button id="btnClear" class="btn" type="button" disabled data-i18n="btn.clear" data-i18n-title="title.clear">Очистить</button>
         <div class="spacer"></div>
-        <button id="btnTheme" class="theme-switch" type="button" title="Переключить тему" aria-label="Переключить тему">
+        <div class="lang-switch" id="langSwitch" role="group" aria-label="RU / EN">
+            <button type="button" data-lang="ru" class="active">RU</button>
+            <button type="button" data-lang="en">EN</button>
+        </div>
+        <button id="btnTheme" class="theme-switch" type="button" data-i18n-title="title.theme" aria-label="Переключить тему">
             <span class="knob"></span>
             <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
             <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -60,11 +65,11 @@
     <div id="gallery" class="gallery" hidden></div>
 
     <section id="stage" class="stage">
-        <div id="emptyState" class="empty-state" title="Нажмите, чтобы выбрать фотографии">
+        <div id="emptyState" class="empty-state" data-i18n-title="empty.hint">
             <div class="empty-icon">🖼️</div>
-            <h2>Перетащите фото сюда</h2>
-            <p>или нажмите здесь, чтобы выбрать, или вставьте изображение из буфера обмена (Ctrl+V)</p>
-            <p class="muted">Поддерживаются JPEG, PNG, WebP, BMP, GIF · до 40 МБ · можно выбрать сразу несколько</p>
+            <h2 data-i18n="empty.title">Перетащите фото сюда</h2>
+            <p data-i18n="empty.p1">или нажмите здесь, чтобы выбрать, или вставьте изображение из буфера обмена (Ctrl+V)</p>
+            <p class="muted" data-i18n="empty.p2">Поддерживаются JPEG, PNG, WebP, BMP, GIF · до 40 МБ · можно выбрать сразу несколько</p>
         </div>
         <div id="canvasWrap" class="canvas-wrap" hidden>
             <canvas id="glcanvas" hidden></canvas>
@@ -72,13 +77,13 @@
         <div id="canvasBar" class="canvas-bar" hidden>
             <span id="stageInfo" class="stage-info"></span>
             <div class="zoom-controls">
-                <button id="rotateLeft" class="btn icon" type="button" title="Повернуть против часовой стрелки">↺</button>
-                <button id="rotateRight" class="btn icon" type="button" title="Повернуть по часовой стрелке">↻</button>
+                <button id="rotateLeft" class="btn icon" type="button" data-i18n-title="title.rotateLeft" title="Повернуть против часовой стрелки">↺</button>
+                <button id="rotateRight" class="btn icon" type="button" data-i18n-title="title.rotateRight" title="Повернуть по часовой стрелке">↻</button>
                 <span class="zoom-sep"></span>
-                <button id="zoomOut" class="btn icon" type="button" title="Уменьшить">−</button>
+                <button id="zoomOut" class="btn icon" type="button" data-i18n-title="title.zoomOut" title="Уменьшить">−</button>
                 <span id="zoomLabel" class="zoom-label">100%</span>
-                <button id="zoomIn" class="btn icon" type="button" title="Увеличить">+</button>
-                <button id="zoomFit" class="btn" type="button" title="Вписать в окно">Вписать</button>
+                <button id="zoomIn" class="btn icon" type="button" data-i18n-title="title.zoomIn" title="Увеличить">+</button>
+                <button id="zoomFit" class="btn" type="button" data-i18n="btn.fit" data-i18n-title="title.fit" title="Вписать в окно">Вписать</button>
             </div>
         </div>
         <div id="glError" class="gl-error" hidden>
@@ -105,7 +110,7 @@
                     </div>
                     <canvas id="curveEditor" width="300" height="180"></canvas>
                     <button id="btnResetCurve" class="btn wide" type="button"
-                            title="Сбросить кривую выбранного канала">Сбросить канал</button>
+                            data-i18n="curve.reset" data-i18n-title="curve.resetTitle">Сбросить канал</button>
                 </div>
             </details>
 
@@ -115,7 +120,7 @@
                 <summary>Экспорт</summary>
                 <div class="group-body">
                     <div class="row">
-                        <span class="row-label">Формат</span>
+                        <span class="row-label" data-i18n="export.format">Формат</span>
                         <div class="seg" id="formatSeg">
                             <button type="button" data-format="jpeg" class="active">JPEG</button>
                             <button type="button" data-format="png">PNG</button>
@@ -123,22 +128,23 @@
                         </div>
                     </div>
                     <div class="row slider-row" id="qualityRow">
-                        <label class="row-label" for="qualityRange">Качество</label>
+                        <label class="row-label" for="qualityRange" data-i18n="export.quality">Качество</label>
                         <input type="range" id="qualityRange" min="1" max="100" step="1" value="90" />
                         <input type="number" id="qualityNum" min="1" max="100" step="1" value="90" aria-label="Качество, число" />
                     </div>
                     <div class="row resize-row">
-                        <span class="row-label">Размер, px</span>
-                        <input type="number" id="maxWidth" min="16" max="6000" placeholder="ширина" />
+                        <span class="row-label" data-i18n="export.size">Размер, px</span>
+                        <input type="number" id="maxWidth" min="16" max="6000" data-i18n-ph="ph.width" placeholder="ширина" />
                         <span class="muted">×</span>
-                        <input type="number" id="maxHeight" min="16" max="6000" placeholder="высота" />
+                        <input type="number" id="maxHeight" min="16" max="6000" data-i18n-ph="ph.height" placeholder="высота" />
                     </div>
-                    <button id="btnExport" class="btn success wide" type="button" disabled>Скачать результат</button>
+                    <button id="btnExport" class="btn success wide" type="button" disabled data-i18n="export.result">Скачать результат</button>
                     <button id="btnExportGallery" class="btn wide" type="button" disabled
+                            data-i18n="export.gallery" data-i18n-title="export.galleryTitle"
                             title="Сохранить все фото галереи с их настройками одним ZIP-архивом">
                         🗂 Сохранить галерею (ZIP)
                     </button>
-                    <p class="muted small">Ползунки применяются к полноразмерному оригиналу на сервере.</p>
+                    <p class="muted small" data-i18n="export.note">Ползунки применяются к полноразмерному оригиналу на сервере.</p>
                 </div>
             </details>
         </div>
@@ -155,7 +161,7 @@
         <h3 id="modalTitle">Подтверждение</h3>
         <p id="modalText"></p>
         <div class="modal-actions">
-            <button id="modalCancel" class="btn" type="button">Отмена</button>
+            <button id="modalCancel" class="btn" type="button" data-i18n="modal.cancel">Отмена</button>
             <button id="modalOk" class="btn danger" type="button">ОК</button>
         </div>
     </div>
