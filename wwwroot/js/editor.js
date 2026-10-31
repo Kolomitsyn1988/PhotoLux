@@ -211,15 +211,19 @@
         return lut;
     }
 
-    function buildLuts(curves) {
+    function buildLutData(curves) {
         const m = computeLut(curves.master), r = computeLut(curves.r),
               g = computeLut(curves.g), b = computeLut(curves.b);
-        const md = new Uint8Array(256 * 4), cd = new Uint8Array(256 * 4);
-        for (let i = 0; i < 256; i++) {
-            md[i * 4] = m[i]; md[i * 4 + 1] = m[i]; md[i * 4 + 2] = m[i]; md[i * 4 + 3] = 255;
-            cd[i * 4] = r[i]; cd[i * 4 + 1] = g[i]; cd[i * 4 + 2] = b[i]; cd[i * 4 + 3] = 255;
+        const rows = [m, r, g, b];
+        const data = new Uint8Array(256 * 4 * 4);
+        for (let row = 0; row < 4; row++) {
+            for (let i = 0; i < 256; i++) {
+                const v = rows[row][i];
+                const o = (row * 256 + i) * 4;
+                data[o] = v; data[o + 1] = v; data[o + 2] = v; data[o + 3] = 255;
+            }
         }
-        return { md, cd };
+        return data;
     }
 
     let settings = cloneSettings(DEFAULTS);
@@ -383,7 +387,7 @@
         if (!image) on = false;
         compare = on;
         el.compare.classList.toggle('active', on);
-        el.origBadge.hidden = !on;
+        if (el.origBadge) el.origBadge.hidden = !on;
         requestRender();
     }
 
@@ -489,8 +493,6 @@ precision highp float;
 varying vec2 v_uv;
 uniform sampler2D u_tex;
 uniform sampler2D u_soft;
-uniform sampler2D u_lutM;
-uniform sampler2D u_lutC;
 uniform vec2 u_texel;
 uniform float u_exposure, u_temperature, u_gamma, u_brightness, u_contrast;
 uniform float u_saturation, u_vibrance, u_hue, u_sharpen;
@@ -546,14 +548,7 @@ void main() {
         c = mix(c, screenV, u_glow * 0.7);
     }
 
-    // Кривые: сначала мастер-канал (RGB), затем поканальные R/G/B.
-    // LUT-текстуры 256×1 с NEAREST-фильтрацией.
-    c.r = texture2D(u_lutM, vec2(c.r, 0.5)).r;
-    c.g = texture2D(u_lutM, vec2(c.g, 0.5)).r;
-    c.b = texture2D(u_lutM, vec2(c.b, 0.5)).r;
-    c.r = texture2D(u_lutC, vec2(c.r, 0.5)).r;
-    c.g = texture2D(u_lutC, vec2(c.g, 0.5)).g;
-    c.b = texture2D(u_lutC, vec2(c.b, 0.5)).b;
+    // Кривые применяются отдельным LUT-проходом до этого шейдера.
 
     c *= exp2(u_exposure);
     c *= vec3(1.0 + 0.30 * u_temperature, 1.0, 1.0 - 0.30 * u_temperature);
@@ -594,8 +589,7 @@ void main() {
         c *= 1.0 - u_vignette * v;
     }
 
-    gl_FragColor = vec4(src.rgb, src.a); // DEBUG: сырой источник
-    // gl_FragColor = vec4(clamp(c, 0.0, 1.0), src.a);
+    gl_FragColor = vec4(clamp(c, 0.0, 1.0), src.a);
 }`;
 
     const COLOR_UNIFORMS = [
@@ -604,6 +598,24 @@ void main() {
         'u_grayscale', 'u_sepia', 'u_blue', 'u_vignette',
         'u_skin', 'u_glow', 'u_bwR', 'u_bwG', 'u_bwB', 'u_rot'
     ];
+
+    // LUT-проход: применяет кривые (мастер → каналы). Текстура 256×4:
+    // строка 0 — мастер, 1 — R, 2 — G, 3 — B (значения в R-канале строк).
+    const FRAG_LUT = `
+precision highp float;
+varying vec2 v_uv;
+uniform sampler2D u_tex;
+uniform sampler2D u_lut;
+void main() {
+    vec3 c = texture2D(u_tex, v_uv).rgb;
+    float mr = texture2D(u_lut, vec2(c.r, 0.125)).r;
+    float mg = texture2D(u_lut, vec2(c.g, 0.125)).r;
+    float mb = texture2D(u_lut, vec2(c.b, 0.125)).r;
+    float rr = texture2D(u_lut, vec2(mr, 0.375)).r;
+    float gg = texture2D(u_lut, vec2(mg, 0.625)).g;
+    float bb = texture2D(u_lut, vec2(mb, 0.875)).b;
+    gl_FragColor = vec4(rr, gg, bb, 1.0);
+}`;
 
     function compile(g, type, source) {
         const sh = g.createShader(type);
@@ -632,22 +644,20 @@ void main() {
         return { p, a_pos: g.getAttribLocation(p, 'a_pos'), u: uniforms };
     }
 
-    let progBlur = null, progColor = null, lutMTex = null, lutCTex = null;
+    let progBlur = null, progLut = null, progColor = null, lutTex = null;
     try {
         progBlur = createProgram(gl, FRAG_BLUR, ['u_tex', 'u_dir']);
+        progLut = createProgram(gl, FRAG_LUT, ['u_tex', 'u_lut']);
         progColor = createProgram(gl, FRAG_COLOR, COLOR_UNIFORMS);
-        lutMTex = gl.createTexture();
-        lutCTex = gl.createTexture();
-        for (const t of [lutMTex, lutCTex]) {
-            gl.bindTexture(gl.TEXTURE_2D, t);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        }
-        gl.useProgram(progColor.p);
-        gl.uniform1i(progColor.u.u_lutM, 2);
-        gl.uniform1i(progColor.u.u_lutC, 3);
+        lutTex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, lutTex);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.useProgram(progLut.p);
+        gl.uniform1i(progLut.u.u_tex, 0);
+        gl.uniform1i(progLut.u.u_lut, 1);
     } catch (e) {
         console.error(e);
         el.glError.hidden = false;
@@ -910,29 +920,31 @@ void main() {
         blurPass(fboB.tex, fboC, SOFT_BLUR_RADIUS / texW, 0);
         blurPass(fboC.tex, fboD, 0, SOFT_BLUR_RADIUS / texH);
 
-        // 5) резкость + портрет + поворот + кривые + цвет + виньетка → экран
+        // 5) LUT-проход: кривые (мастер → каналы), результат → A
+        const lutData = buildLutData(s.curves);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fboA.fb);
+        gl.viewport(0, 0, texW, texH);
+        gl.useProgram(progLut.p);
+        gl.uniform1i(progLut.u.u_tex, 0);
+        gl.uniform1i(progLut.u.u_lut, 1);
+        bindTexture(0, fboB.tex);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, lutTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 4, 0, gl.RGBA, gl.UNSIGNED_BYTE, lutData);
+        drawQuad(progLut);
+
+        // 6) резкость + портрет + поворот + цвет + виньетка → экран
         const out = outDims();
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, out.w, out.h);
         gl.useProgram(progColor.p);
         gl.uniform1i(progColor.u.u_tex, 0);
         gl.uniform1i(progColor.u.u_soft, 1);
-        bindTexture(0, fboB.tex);
+        bindTexture(0, fboA.tex);
         bindTexture(1, fboD.tex);
 
-        // LUT кривых: отдельные текстурные блоки 2 и 3 — загрузка строго
-        // в них, чтобы не затереть u_tex (блок 0) и u_soft (блок 1)
-        const luts = buildLuts(s.curves);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-        gl.activeTexture(gl.TEXTURE2);
-        gl.bindTexture(gl.TEXTURE_2D, lutMTex);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, luts.md);
-        gl.activeTexture(gl.TEXTURE3);
-        gl.bindTexture(gl.TEXTURE_2D, lutCTex);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, luts.cd);
-        gl.activeTexture(gl.TEXTURE0);
-        gl.uniform2f(progColor.u.u_texel, 1 / texW, 1 / texH);
         const u = progColor.u;
+        gl.uniform2f(progColor.u.u_texel, 1 / texW, 1 / texH);
         gl.uniform1f(u.u_exposure, n.exposure);
         gl.uniform1f(u.u_temperature, n.temperature);
         gl.uniform1f(u.u_gamma, n.gamma);
@@ -1320,7 +1332,7 @@ void main() {
         image = items[idx];
         settings = cloneSettings({ ...DEFAULTS, ...(image.settings || {}) });
         compare = false;
-        el.origBadge.hidden = true;
+        if (el.origBadge) el.origBadge.hidden = true;
         el.compare.classList.remove('active');
         syncInputs();
         updateGalleryActive();
@@ -1806,11 +1818,6 @@ void main() {
     });
 
     // ---------- старт ----------
-    window.__PS = {
-        get gl() { return gl; }, get texSrc() { return texSrc; },
-        get fboB() { return fboB; }, get lutMTex() { return lutMTex; },
-        get lutCTex() { return lutCTex; }, get texW() { return texW; }
-    };
     el.langSwitch.addEventListener('click', e => {
         const b = e.target.closest('button[data-lang]');
         if (!b || b.dataset.lang === lang) return;
