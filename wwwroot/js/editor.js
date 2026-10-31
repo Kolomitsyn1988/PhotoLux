@@ -576,7 +576,8 @@ void main() {
         c *= 1.0 - u_vignette * v;
     }
 
-    gl_FragColor = vec4(clamp(c, 0.0, 1.0), src.a);
+    gl_FragColor = vec4(src.rgb, src.a); // DEBUG: сырой источник
+    // gl_FragColor = vec4(clamp(c, 0.0, 1.0), src.a);
 }`;
 
     const COLOR_UNIFORMS = [
@@ -874,11 +875,6 @@ void main() {
         drawQuad(progBlur);
     }
 
-    function uploadLut(tex, data) {
-        gl.bindTexture(gl.TEXTURE_2D, tex);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
-    }
-
     function render() {
         if (!gl || !texSrc) return;
         const s = compare ? DEFAULTS : settings;
@@ -906,15 +902,17 @@ void main() {
         bindTexture(0, fboB.tex);
         bindTexture(1, fboD.tex);
 
-        // LUT кривых: два текстure 256×1, NEAREST — точное соответствие серверу
+        // LUT кривых: отдельные текстурные блоки 2 и 3 — загрузка строго
+        // в них, чтобы не затереть u_tex (блок 0) и u_soft (блок 1)
         const luts = buildLuts(s.curves);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-        uploadLut(lutMTex, luts.md);
-        uploadLut(lutCTex, luts.cd);
         gl.activeTexture(gl.TEXTURE2);
         gl.bindTexture(gl.TEXTURE_2D, lutMTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, luts.md);
         gl.activeTexture(gl.TEXTURE3);
         gl.bindTexture(gl.TEXTURE_2D, lutCTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, luts.cd);
+        gl.activeTexture(gl.TEXTURE0);
         gl.uniform2f(progColor.u.u_texel, 1 / texW, 1 / texH);
         const u = progColor.u;
         gl.uniform1f(u.u_exposure, n.exposure);
@@ -943,11 +941,17 @@ void main() {
     function requestRender() {
         if (rafPending) return;
         rafPending = true;
-        requestAnimationFrame(() => {
+        let done = false;
+        const run = () => {
+            if (done) return;
+            done = true;
             rafPending = false;
             render();
             scheduleHistogram();
-        });
+        };
+        // rAF не срабатывает в скрытых/фоновых вкладках — дублируем таймером
+        requestAnimationFrame(run);
+        setTimeout(run, 34);
     }
 
     // ---------- гистограмма ----------
@@ -1779,6 +1783,11 @@ void main() {
     });
 
     // ---------- старт ----------
+    window.__PS = {
+        get gl() { return gl; }, get texSrc() { return texSrc; },
+        get fboB() { return fboB; }, get lutMTex() { return lutMTex; },
+        get lutCTex() { return lutCTex; }, get texW() { return texW; }
+    };
     el.langSwitch.addEventListener('click', e => {
         const b = e.target.closest('button[data-lang]');
         if (!b || b.dataset.lang === lang) return;
