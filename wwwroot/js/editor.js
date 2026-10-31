@@ -5,16 +5,91 @@
     'use strict';
 
     // ---------- состояние ----------
+    const IDENTITY_CURVE = [[0, 0], [1, 1]];
     const DEFAULTS = {
         exposure: 0, brightness: 0, contrast: 0, gamma: 1,
         temperature: 0, hue: 0, saturation: 0, vibrance: 0,
         sharpen: 0, blur: 0,
         skin: 0, glow: 0,
         vignette: 0, grayscale: 0, sepia: 0, blue: 0,
-        bwRed: 0, bwGreen: 0, bwBlue: 0
+        bwRed: 0, bwGreen: 0, bwBlue: 0,
+        curves: {
+            master: IDENTITY_CURVE.map(p => [...p]),
+            r: IDENTITY_CURVE.map(p => [...p]),
+            g: IDENTITY_CURVE.map(p => [...p]),
+            b: IDENTITY_CURVE.map(p => [...p])
+        }
     };
 
-    let settings = { ...DEFAULTS };
+    function cloneCurves(c) {
+        return {
+            master: (c?.master || IDENTITY_CURVE).map(p => [...p]),
+            r: (c?.r || IDENTITY_CURVE).map(p => [...p]),
+            g: (c?.g || IDENTITY_CURVE).map(p => [...p]),
+            b: (c?.b || IDENTITY_CURVE).map(p => [...p])
+        };
+    }
+
+    // все присвоения settings идут через клон: кривые — вложенные объекты
+    function cloneSettings(s) {
+        const t = { ...s };
+        t.curves = cloneCurves(s.curves);
+        return t;
+    }
+
+    function isCurvesIdentityPoints(c) {
+        if (!c) return true;
+        return ['master', 'r', 'g', 'b'].every(ch => {
+            const pts = c[ch];
+            return pts.length === 2 &&
+                pts[0][0] === 0 && pts[0][1] === 0 &&
+                pts[1][0] === 1 && pts[1][1] === 1;
+        });
+    }
+
+    // монотонный кубический сплайн (Fritsch–Carlson) → LUT 256 значений
+    function computeLut(points) {
+        const pts = [...points].sort((a, b) => a[0] - b[0]);
+        const n = pts.length;
+        const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+        if (n < 2) { const l = new Uint8Array(256); for (let i = 0; i < 256; i++) l[i] = i; return l; }
+        const d = new Array(n - 1);
+        for (let i = 0; i < n - 1; i++) d[i] = (ys[i + 1] - ys[i]) / Math.max(1e-6, xs[i + 1] - xs[i]);
+        const m = new Array(n);
+        m[0] = d[0]; m[n - 1] = d[n - 2];
+        for (let i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2;
+        for (let i = 0; i < n - 1; i++) {
+            if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+            const a = m[i] / d[i], b = m[i + 1] / d[i], s = a * a + b * b;
+            if (s > 9) { const t = 3 / Math.sqrt(s); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; }
+        }
+        const lut = new Uint8Array(256);
+        let seg = 0;
+        for (let i = 0; i < 256; i++) {
+            const x = i / 255;
+            while (seg < n - 2 && x > xs[seg + 1]) seg++;
+            const h = Math.max(1e-6, xs[seg + 1] - xs[seg]);
+            const t = Math.min(1, Math.max(0, (x - xs[seg]) / h));
+            const t2 = t * t, t3 = t2 * t;
+            const y = (2 * t3 - 3 * t2 + 1) * ys[seg] + (t3 - 2 * t2 + t) * h * m[seg] +
+                      (-2 * t3 + 3 * t2) * ys[seg + 1] + (t3 - t2) * h * m[seg + 1];
+            lut[i] = Math.max(0, Math.min(255, Math.round(y * 255)));
+        }
+        return lut;
+    }
+
+    function buildLuts(curves) {
+        const m = computeLut(curves.master), r = computeLut(curves.r),
+              g = computeLut(curves.g), b = computeLut(curves.b);
+        const md = new Uint8Array(256 * 4), cd = new Uint8Array(256 * 4);
+        for (let i = 0; i < 256; i++) {
+            md[i * 4] = m[i]; md[i * 4 + 1] = m[i]; md[i * 4 + 2] = m[i]; md[i * 4 + 3] = 255;
+            cd[i * 4] = r[i]; cd[i * 4 + 1] = g[i]; cd[i * 4 + 2] = b[i]; cd[i * 4 + 3] = 255;
+        }
+        return { md, cd };
+    }
+
+    let settings = cloneSettings(DEFAULTS);
     let items = [];            // загруженные фото: { id, name, width, height, ext, url, settings }
     let activeIndex = -1;
     let image = null;          // активный элемент items
@@ -115,7 +190,8 @@
         busy: $('busy'), busyText: $('busyText'), toasts: $('toasts'), gallery: $('gallery'),
         formatSeg: $('formatSeg'), qualityRow: $('qualityRow'), qualityRange: $('qualityRange'),
         qualityNum: $('qualityNum'), maxWidth: $('maxWidth'), maxHeight: $('maxHeight'),
-        btnExport: $('btnExport'), histogram: $('histogram')
+        btnExport: $('btnExport'), histogram: $('histogram'),
+        curveEditor: $('curveEditor'), curvesChannels: $('curvesChannels'), btnResetCurve: $('btnResetCurve')
     };
 
     // ---------- зум предпросмотра (100% = вписано в окно) ----------
@@ -145,7 +221,7 @@
     function pushHistory(snapshot) {
         const item = items[activeIndex];
         if (!item) return;
-        (item.history ||= []).push(snapshot ? { ...snapshot } : { ...settings });
+        (item.history ||= []).push(cloneSettings(snapshot || settings));
         if (item.history.length > HISTORY_LIMIT) item.history.shift();
         updateUndoBtn();
     }
@@ -153,8 +229,8 @@
     function undo() {
         const item = items[activeIndex];
         if (!item || !item.history || !item.history.length) return;
-        settings = item.history.pop();
-        item.settings = { ...settings };
+        settings = cloneSettings(item.history.pop());
+        item.settings = cloneSettings(settings);
         syncInputs();
         requestRender();
         refreshPencil(item, settings);
@@ -169,7 +245,8 @@
 
     // ---------- признаки и превью правок в галерее ----------
     function isEdited(s) {
-        return Object.keys(DEFAULTS).some(k => s[k] !== DEFAULTS[k]);
+        if (Object.keys(DEFAULTS).some(k => k !== 'curves' && s[k] !== DEFAULTS[k])) return true;
+        return !isCurvesIdentityPoints(s.curves);
     }
 
     function refreshPencil(item, liveSettings) {
@@ -262,6 +339,8 @@ precision highp float;
 varying vec2 v_uv;
 uniform sampler2D u_tex;
 uniform sampler2D u_soft;
+uniform sampler2D u_lutM;
+uniform sampler2D u_lutC;
 uniform vec2 u_texel;
 uniform float u_exposure, u_temperature, u_gamma, u_brightness, u_contrast;
 uniform float u_saturation, u_vibrance, u_hue, u_sharpen;
@@ -316,6 +395,15 @@ void main() {
         vec3 screenV = 1.0 - (1.0 - c) * (1.0 - softCol);
         c = mix(c, screenV, u_glow * 0.7);
     }
+
+    // Кривые: сначала мастер-канал (RGB), затем поканальные R/G/B.
+    // LUT-текстуры 256×1 с NEAREST-фильтрацией.
+    c.r = texture2D(u_lutM, vec2(c.r, 0.5)).r;
+    c.g = texture2D(u_lutM, vec2(c.g, 0.5)).r;
+    c.b = texture2D(u_lutM, vec2(c.b, 0.5)).r;
+    c.r = texture2D(u_lutC, vec2(c.r, 0.5)).r;
+    c.g = texture2D(u_lutC, vec2(c.g, 0.5)).g;
+    c.b = texture2D(u_lutC, vec2(c.b, 0.5)).b;
 
     c *= exp2(u_exposure);
     c *= vec3(1.0 + 0.30 * u_temperature, 1.0, 1.0 - 0.30 * u_temperature);
@@ -393,10 +481,22 @@ void main() {
         return { p, a_pos: g.getAttribLocation(p, 'a_pos'), u: uniforms };
     }
 
-    let progBlur = null, progColor = null;
+    let progBlur = null, progColor = null, lutMTex = null, lutCTex = null;
     try {
         progBlur = createProgram(gl, FRAG_BLUR, ['u_tex', 'u_dir']);
         progColor = createProgram(gl, FRAG_COLOR, COLOR_UNIFORMS);
+        lutMTex = gl.createTexture();
+        lutCTex = gl.createTexture();
+        for (const t of [lutMTex, lutCTex]) {
+            gl.bindTexture(gl.TEXTURE_2D, t);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        }
+        gl.useProgram(progColor.p);
+        gl.uniform1i(progColor.u.u_lutM, 2);
+        gl.uniform1i(progColor.u.u_lutC, 3);
     } catch (e) {
         console.error(e);
         el.glError.hidden = false;
@@ -602,6 +702,7 @@ void main() {
     }
 
     function normalizedSettings(s) {
+        const identity = isCurvesIdentityPoints(s.curves);
         return {
             exposure: s.exposure,
             gamma: s.gamma,
@@ -621,7 +722,14 @@ void main() {
             blue: s.blue / 100,
             bwRed: s.bwRed / 100,
             bwGreen: s.bwGreen / 100,
-            bwBlue: s.bwBlue / 100
+            bwBlue: s.bwBlue / 100,
+            // LUT [мастер, R, G, B] по 256 значений; identity не отправляем
+            curves: identity ? null : [
+                Array.from(computeLut(s.curves.master)),
+                Array.from(computeLut(s.curves.r)),
+                Array.from(computeLut(s.curves.g)),
+                Array.from(computeLut(s.curves.b))
+            ]
         };
     }
 
@@ -632,6 +740,11 @@ void main() {
         bindTexture(0, sourceTex);
         gl.uniform2f(progBlur.u.u_dir, radiusX, radiusY);
         drawQuad(progBlur);
+    }
+
+    function uploadLut(tex, data) {
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
     }
 
     function render() {
@@ -651,7 +764,7 @@ void main() {
         blurPass(fboB.tex, fboC, SOFT_BLUR_RADIUS / texW, 0);
         blurPass(fboC.tex, fboD, 0, SOFT_BLUR_RADIUS / texH);
 
-        // 5) резкость + портрет + поворот + цвет + виньетка → экран
+        // 5) резкость + портрет + поворот + кривые + цвет + виньетка → экран
         const out = outDims();
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, out.w, out.h);
@@ -660,6 +773,16 @@ void main() {
         gl.uniform1i(progColor.u.u_soft, 1);
         bindTexture(0, fboB.tex);
         bindTexture(1, fboD.tex);
+
+        // LUT кривых: два текстure 256×1, NEAREST — точное соответствие серверу
+        const luts = buildLuts(s.curves);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        uploadLut(lutMTex, luts.md);
+        uploadLut(lutCTex, luts.cd);
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, lutMTex);
+        gl.activeTexture(gl.TEXTURE3);
+        gl.bindTexture(gl.TEXTURE_2D, lutCTex);
         gl.uniform2f(progColor.u.u_texel, 1 / texW, 1 / texH);
         const u = progColor.u;
         gl.uniform1f(u.u_exposure, n.exposure);
@@ -700,6 +823,7 @@ void main() {
     const histSrcCtx = hist2d.getContext('2d', { willReadFrequently: true });
     const histCtx = el.histogram.getContext('2d');
     let histTimer = null;
+    let histBins = null; // бины последней гистограммы — подложка редактора кривых
 
     function scheduleHistogram() {
         if (histTimer) return;
@@ -715,7 +839,7 @@ void main() {
         histCtx.fillStyle = getComputedStyle(document.documentElement)
             .getPropertyValue('--hist-bg').trim() || '#fbfbfd';
         histCtx.fillRect(0, 0, W, H);
-        if (!texSrc) return;
+        if (!texSrc) { histBins = null; return; }
 
         const hh = Math.max(1, Math.min(H, Math.round(W * texH / texW)));
         hist2d.width = W; hist2d.height = hh;
@@ -733,6 +857,7 @@ void main() {
             bins[1][data[i + 1]]++;
             bins[2][data[i + 2]]++;
         }
+        histBins = bins;
 
         let max = 1;
         for (const ch of bins) for (const v of ch) if (v > max) max = v;
@@ -753,6 +878,173 @@ void main() {
         }
         histCtx.globalCompositeOperation = 'source-over';
     }
+
+    // ---------- редактор кривых ----------
+    const curveCv = el.curveEditor;
+    const curveCtx = curveCv.getContext('2d');
+    let curveChannel = 'master';
+    let curveDragIdx = -1;
+    let curveDragMoved = false;
+    let curveDragSnap = null;
+
+    const CURVE_COLORS = { master: '#e8e8ee', r: '#ff6a5e', g: '#5ad06a', b: '#6aa8ff' };
+
+    function drawCurveEditor() {
+        const W = curveCv.width, H = curveCv.height;
+        curveCtx.clearRect(0, 0, W, H);
+        curveCtx.fillStyle = getComputedStyle(document.documentElement)
+            .getPropertyValue('--hist-bg').trim() || '#1c1c20';
+        curveCtx.fillRect(0, 0, W, H);
+
+        curveCtx.strokeStyle = 'rgba(255,255,255,0.09)';
+        curveCtx.lineWidth = 1;
+        curveCtx.beginPath();
+        for (let i = 1; i < 4; i++) {
+            const p = Math.round(i * W / 4) + 0.5;
+            curveCtx.moveTo(p, 0); curveCtx.lineTo(p, H);
+            curveCtx.moveTo(0, Math.round(i * H / 4) + 0.5); curveCtx.lineTo(W, Math.round(i * H / 4) + 0.5);
+        }
+        curveCtx.stroke();
+
+        // гистограмма выбранного канала как подложка
+        if (histBins) {
+            const idx = { master: -1, r: 0, g: 1, b: 2 }[curveChannel];
+            let maxV = 1;
+            if (idx >= 0) for (let i = 0; i < 256; i++) if (histBins[idx][i] > maxV) maxV = histBins[idx][i];
+            curveCtx.beginPath();
+            curveCtx.moveTo(0, H);
+            for (let i = 0; i < 256; i++) {
+                const v = idx >= 0
+                    ? histBins[idx][i]
+                    : 0.2126 * histBins[0][i] + 0.7152 * histBins[1][i] + 0.0722 * histBins[2][i];
+                curveCtx.lineTo(i * W / 255, H - (v / maxV) * (H - 2));
+            }
+            curveCtx.lineTo(W, H);
+            curveCtx.closePath();
+            curveCtx.fillStyle = 'rgba(255,255,255,0.14)';
+            curveCtx.fill();
+        }
+
+        // диагональ-ориентир
+        curveCtx.strokeStyle = 'rgba(255,255,255,0.25)';
+        curveCtx.beginPath(); curveCtx.moveTo(0, H); curveCtx.lineTo(W, 0); curveCtx.stroke();
+
+        // кривая — ровно та, что уходит в шейдер и на сервер
+        const lut = computeLut(settings.curves[curveChannel]);
+        curveCtx.strokeStyle = CURVE_COLORS[curveChannel];
+        curveCtx.lineWidth = 2;
+        curveCtx.beginPath();
+        for (let i = 0; i < 256; i++) {
+            const px = i * W / 255, py = H - (lut[i] / 255) * H;
+            if (i === 0) curveCtx.moveTo(px, py); else curveCtx.lineTo(px, py);
+        }
+        curveCtx.stroke();
+
+        curveCtx.fillStyle = '#fff';
+        curveCtx.lineWidth = 1.5;
+        for (const p of settings.curves[curveChannel]) {
+            const px = p[0] * W, py = H - p[1] * H;
+            curveCtx.fillStyle = '#fff';
+            curveCtx.fillRect(px - 4, py - 4, 8, 8);
+            curveCtx.strokeStyle = CURVE_COLORS[curveChannel];
+            curveCtx.strokeRect(px - 4, py - 4, 8, 8);
+        }
+    }
+
+    function curvePointFromEvent(e) {
+        const rect = curveCv.getBoundingClientRect();
+        return {
+            x: Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)),
+            y: Math.min(1, Math.max(0, 1 - (e.clientY - rect.top) / rect.height))
+        };
+    }
+
+    function curveChanged() {
+        drawCurveEditor();
+        requestRender();
+        refreshPencil(items[activeIndex], settings);
+        scheduleThumbUpdate();
+    }
+
+    curveCv.addEventListener('pointerdown', e => {
+        if (!texSrc) return;
+        const { x, y } = curvePointFromEvent(e);
+        const pts = settings.curves[curveChannel];
+        let idx = -1, best = 14;
+        pts.forEach((p, i) => {
+            const d = Math.hypot((p[0] - x) * curveCv.width, (p[1] - y) * curveCv.height);
+            if (d < best) { best = d; idx = i; }
+        });
+        if (idx === -1) {
+            if (x <= 0.02) idx = 0;
+            else if (x >= 0.98) idx = pts.length - 1;
+            else {
+                idx = 1;
+                while (idx < pts.length && pts[idx][0] < x) idx++;
+                pts.splice(idx, 0, [x, y]);
+            }
+        }
+        curveDragIdx = idx;
+        curveDragMoved = false;
+        curveDragSnap = cloneSettings(settings);
+        curveCv.setPointerCapture(e.pointerId);
+        curveChanged();
+    });
+
+    curveCv.addEventListener('pointermove', e => {
+        if (curveDragIdx < 0) return;
+        const { x, y } = curvePointFromEvent(e);
+        const pts = settings.curves[curveChannel];
+        const p = pts[curveDragIdx];
+        if (curveDragIdx === 0) p[0] = 0;
+        else if (curveDragIdx === pts.length - 1) p[0] = 1;
+        else {
+            const lo = pts[curveDragIdx - 1][0] + 0.02;
+            const hi = pts[curveDragIdx + 1][0] - 0.02;
+            p[0] = Math.min(hi, Math.max(lo, x));
+        }
+        p[1] = y;
+        curveDragMoved = true;
+        curveChanged();
+    });
+
+    curveCv.addEventListener('pointerup', () => {
+        if (curveDragIdx >= 0) {
+            if (curveDragMoved) pushHistory(curveDragSnap);
+            curveDragIdx = -1;
+            curveDragSnap = null;
+        }
+    });
+
+    curveCv.addEventListener('dblclick', e => {
+        const { x, y } = curvePointFromEvent(e);
+        const pts = settings.curves[curveChannel];
+        let idx = -1, best = 14;
+        pts.forEach((p, i) => {
+            const d = Math.hypot((p[0] - x) * curveCv.width, (p[1] - y) * curveCv.height);
+            if (d < best) { best = d; idx = i; }
+        });
+        if (idx > 0 && idx < pts.length - 1 && pts.length > 2) {
+            pushHistory();
+            pts.splice(idx, 1);
+            curveChanged();
+        }
+    });
+
+    el.curvesChannels.addEventListener('click', e => {
+        const b = e.target.closest('button[data-ch]');
+        if (!b) return;
+        curveChannel = b.dataset.ch;
+        for (const btn of el.curvesChannels.querySelectorAll('button'))
+            btn.classList.toggle('active', btn === b);
+        drawCurveEditor();
+    });
+
+    el.btnResetCurve.addEventListener('click', () => {
+        pushHistory();
+        settings.curves[curveChannel] = IDENTITY_CURVE.map(p => [...p]);
+        curveChanged();
+    });
 
     // ---------- загрузка изображения ----------
     async function loadAndSetup(url) {
@@ -818,7 +1110,9 @@ void main() {
         el.canvas.hidden = true;
         el.empty.hidden = false;
         for (const b of [el.compare, el.reset, el.download, el.btnExport, el.clear, el.undo, el.exportGallery]) b.disabled = true;
+        histBins = null;
         histCtx.clearRect(0, 0, el.histogram.width, el.histogram.height);
+        drawCurveEditor();
     }
 
     function updateInfo() {
@@ -862,12 +1156,12 @@ void main() {
     async function activateItem(idx) {
         if (idx < 0 || idx >= items.length) return;
         if (activeIndex >= 0 && items[activeIndex]) {
-            items[activeIndex].settings = { ...settings };
+            items[activeIndex].settings = cloneSettings(settings);
             refreshPencil(items[activeIndex]);
         }
         activeIndex = idx;
         image = items[idx];
-        settings = { ...DEFAULTS, ...(image.settings || {}) };
+        settings = cloneSettings({ ...DEFAULTS, ...(image.settings || {}) });
         compare = false;
         el.compare.classList.remove('active');
         syncInputs();
@@ -1179,7 +1473,7 @@ void main() {
             chip.append(thumb, label);
             chip.addEventListener('click', () => {
                 pushHistory();
-                settings = { ...DEFAULTS, ...preset.values };
+                settings = cloneSettings({ ...DEFAULTS, ...preset.values });
                 syncInputs();
                 requestRender();
                 refreshPencil(items[activeIndex], settings);
@@ -1240,7 +1534,7 @@ void main() {
 
     el.reset.addEventListener('click', () => {
         pushHistory();
-        settings = { ...DEFAULTS };
+        settings = cloneSettings(DEFAULTS);
         syncInputs();
         requestRender();
         refreshPencil(items[activeIndex], settings);
@@ -1284,7 +1578,7 @@ void main() {
     // Пакетный экспорт: все фото галереи с их настройками одним ZIP-архивом
     el.exportGallery.addEventListener('click', async () => {
         if (!items.length || uploading) return;
-        if (activeIndex >= 0 && items[activeIndex]) items[activeIndex].settings = { ...settings };
+        if (activeIndex >= 0 && items[activeIndex]) items[activeIndex].settings = cloneSettings(settings);
         busy(true, `Готовим архив (${items.length})…`);
         try {
             const body = {
@@ -1353,4 +1647,5 @@ void main() {
     // ---------- старт ----------
     buildPanel();
     buildPresets();
+    drawCurveEditor();
 })();

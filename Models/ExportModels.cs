@@ -26,6 +26,12 @@ public class AdjustmentSettings
     public float BwGreen { get; set; }       // -1..1
     public float BwBlue { get; set; }        // -1..1
 
+    /// <summary>
+    /// Кривые как LUT 4×256: [мастер, R, G, B]. null — не заданы (identity).
+    /// Клиент считает LUT из контрольных точек, сервер применяет как есть.
+    /// </summary>
+    public int[][]? Curves { get; set; }
+
     public static AdjustmentSettings Default { get; } = new();
 
     public AdjustmentSettings Clamped() => new()
@@ -49,14 +55,43 @@ public class AdjustmentSettings
         BwRed = Math.Clamp(BwRed, -1f, 1f),
         BwGreen = Math.Clamp(BwGreen, -1f, 1f),
         BwBlue = Math.Clamp(BwBlue, -1f, 1f),
+        Curves = NormalizeCurves(Curves),
     };
+
+    /// <summary>
+    /// Валидирует LUT: 4 строки по 256 значений 0..255; битые строки
+    /// заменяются на identity; полностью identity-кривые → null.
+    /// </summary>
+    private static int[][]? NormalizeCurves(int[][]? curves)
+    {
+        if (curves == null || curves.Length != 4) return null;
+        var result = new int[4][];
+        var isIdentity = true;
+        for (int ch = 0; ch < 4; ch++)
+        {
+            var row = new int[256];
+            var src = curves[ch];
+            for (int i = 0; i < 256; i++)
+            {
+                var v = src != null && src.Length == 256 ? Math.Clamp(src[i], 0, 255) : i;
+                row[i] = v;
+                if (v != i) isIdentity = false;
+            }
+            result[ch] = row;
+        }
+        return isIdentity ? null : result;
+    }
+
+    /// <summary>LUT не меняет значения.</summary>
+    private static bool IsCurvesIdentity(int[][]? curves) => curves == null;
 
     /// <summary>Все цветовые параметры в нейтральном положении.</summary>
     public bool IsColorIdentity =>
         Exposure == 0f && Brightness == 0f && Contrast == 0f && Gamma == 1f &&
         Temperature == 0f && Hue == 0f && Saturation == 0f && Vibrance == 0f &&
         Vignette == 0f && Grayscale == 0f && Sepia == 0f && Blue == 0f &&
-        BwRed == 0f && BwGreen == 0f && BwBlue == 0f;
+        BwRed == 0f && BwGreen == 0f && BwBlue == 0f &&
+        IsCurvesIdentity(Curves);
 }
 
 /// <summary>Один элемент галереи для пакетного экспорта.</summary>

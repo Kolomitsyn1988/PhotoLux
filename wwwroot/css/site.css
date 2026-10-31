@@ -279,6 +279,19 @@ html[data-theme="dark"] .theme-switch .knob { left: calc(100% - 25px); }
 /* отступ после плиток пресетов */
 #presets { margin-bottom: 18px; }
 
+/* ---------- редактор кривых ---------- */
+#curveEditor {
+    width: 100%;
+    display: block;
+    margin-top: 8px;
+    border-radius: 8px;
+    background: var(--hist-bg);
+    cursor: crosshair;
+    touch-action: none;
+}
+
+#btnResetCurve { margin-top: 8px; }
+
 .gallery-item:hover .remove { opacity: 1; }
 
 /* ---------- основная область ---------- */

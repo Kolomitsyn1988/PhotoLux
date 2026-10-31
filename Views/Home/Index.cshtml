@@ -93,6 +93,22 @@
 
         <div class="panel-scroll">
             <div id="presets"></div>
+
+            <details class="tile group" open id="curvesGroup">
+                <summary>Кривые</summary>
+                <div class="group-body">
+                    <div class="seg curves-channels" id="curvesChannels">
+                        <button type="button" data-ch="master" class="active">RGB</button>
+                        <button type="button" data-ch="r">R</button>
+                        <button type="button" data-ch="g">G</button>
+                        <button type="button" data-ch="b">B</button>
+                    </div>
+                    <canvas id="curveEditor" width="300" height="180"></canvas>
+                    <button id="btnResetCurve" class="btn wide" type="button"
+                            title="Сбросить кривую выбранного канала">Сбросить канал</button>
+                </div>
+            </details>
+
             <div id="sliderGroups"></div>
 
             <details class="tile group" open>

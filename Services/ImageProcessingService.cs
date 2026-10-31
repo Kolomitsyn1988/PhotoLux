@@ -109,7 +109,7 @@ public sealed class ImageProcessingService
             ApplyFaceEffects(image, settings.Skin, settings.Glow, scale);
 
         if (!settings.IsColorIdentity)
-            ApplyColorPipeline(image, settings);
+            ApplyColorPipeline(image, settings, settings.Curves);
 
         return Encode(image, request.Format, Math.Clamp(request.Quality, 1, 100));
     }
@@ -224,13 +224,31 @@ public sealed class ImageProcessingService
 
     /// <summary>
     /// Цветовая коррекция. Порядок операций повторяет шейдер:
-    /// экспозиция → температура → гамма → яркость → контраст →
-    /// насыщенность → красочность → оттенок → ч/б (поканальные веса) →
-    /// сепия → синий тон → виньетка.
+    /// кривые (мастер → каналы) → экспозиция → температура → гамма →
+    /// яркость → контраст → насыщенность → красочность → оттенок →
+    /// ч/б (поканальные веса) → сепия → синий тон → виньетка.
     /// </summary>
-    private static void ApplyColorPipeline(Image<Rgba32> image, AdjustmentSettings s)
+    private static void ApplyColorPipeline(Image<Rgba32> image, AdjustmentSettings s, int[][]? curves)
     {
         int w = image.Width, h = image.Height;
+
+        // Кривые: LUT применяются к каждому каналу, мастер-канал первым.
+        byte[]? lutM = null, lutR = null, lutG = null, lutB = null;
+        if (curves != null && curves.Length == 4)
+        {
+            byte[] ToLut(int[] row)
+            {
+                var lut = new byte[256];
+                for (int i = 0; i < 256; i++) lut[i] = (byte)Math.Clamp(row[i], 0, 255);
+                return lut;
+            }
+            lutM = ToLut(curves[0]);
+            lutR = ToLut(curves[1]);
+            lutG = ToLut(curves[2]);
+            lutB = ToLut(curves[3]);
+        }
+
+        static int Idx(float v) => Math.Clamp((int)(v * 255f + 0.5f), 0, 255);
 
         float exposure = MathF.Pow(2f, s.Exposure);
         float tempR = 1f + 0.30f * s.Temperature;
@@ -262,6 +280,17 @@ public sealed class ImageProcessingService
                     float r = p.R / 255f;
                     float g = p.G / 255f;
                     float b = p.B / 255f;
+
+                    // Кривые: мастер-канал, затем поканальные (синхронно с шейдером)
+                    if (lutM != null)
+                    {
+                        r = lutM[Idx(r)] / 255f;
+                        g = lutM[Idx(g)] / 255f;
+                        b = lutM[Idx(b)] / 255f;
+                    }
+                    if (lutR != null) r = lutR[Idx(r)] / 255f;
+                    if (lutG != null) g = lutG[Idx(g)] / 255f;
+                    if (lutB != null) b = lutB[Idx(b)] / 255f;
 
                     r *= exposure;
                     g *= exposure;
