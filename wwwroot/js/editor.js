@@ -1123,11 +1123,13 @@ void main() {
         curveDragIdx = idx;
         curveDragMoved = false;
         curveDragSnap = cloneSettings(settings);
-        curveCv.setPointerCapture(e.pointerId);
+        try { curveCv.setPointerCapture(e.pointerId); } catch (err) { /* не критично */ }
         curveChanged();
     });
 
-    curveCv.addEventListener('pointermove', e => {
+    // move/up на window: перетаскивание не срывается, даже если
+    // setPointerCapture не сработал или курсор ушёл за пределы канваса
+    window.addEventListener('pointermove', e => {
         if (curveDragIdx < 0) return;
         const { x, y } = curvePointFromEvent(e);
         const pts = settings.curves[curveChannel];
@@ -1144,7 +1146,7 @@ void main() {
         curveChanged();
     });
 
-    curveCv.addEventListener('pointerup', () => {
+    window.addEventListener('pointerup', () => {
         if (curveDragIdx >= 0) {
             if (curveDragMoved) pushHistory(curveDragSnap);
             curveDragIdx = -1;
